@@ -302,7 +302,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="bg-osmak-900 p-8 text-white text-center">
           <div className="flex justify-center mb-4">
