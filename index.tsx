@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
 import { 
   ShieldAlert, 
   Lightbulb, 
@@ -30,8 +31,15 @@ import {
   ClipboardList,
   RotateCcw,
   Layers,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
+
+// --- Supabase Configuration ---
+const SUPABASE_URL = 'https://jtohqxhfinqjspihturh.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0b2hxeGhmaW5xanNwaWh0dXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNTkzNDgsImV4cCI6MjA3OTgzNTM0OH0.-XZbu74I7OtJ11tEnSUfgegGaWH0aGF0hyEXpqLJoV0';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- Types & Interfaces ---
 
@@ -87,6 +95,60 @@ interface RegistryItem {
   createdAt: string;
 }
 
+// --- Data Mapping Helpers (CamelCase <-> SnakeCase) ---
+
+const mapToDb = (item: RegistryItem) => ({
+  id: item.id,
+  section: item.section,
+  process: item.process,
+  source: item.source,
+  description: item.description,
+  type: item.type,
+  impact_qms: item.impactQMS,
+  likelihood: item.likelihood,
+  severity: item.severity,
+  risk_rating: item.riskRating,
+  risk_level: item.riskLevel,
+  existing_controls: item.existingControls,
+  expected_benefit: item.expectedBenefit,
+  feasibility: item.feasibility,
+  action_plans: item.actionPlans,
+  residual_likelihood: item.residualLikelihood,
+  residual_severity: item.residualSeverity,
+  residual_risk_rating: item.residualRiskRating,
+  residual_risk_level: item.residualRiskLevel,
+  effectiveness_remarks: item.effectivenessRemarks,
+  reassessment_date: item.reassessmentDate,
+  status: item.status,
+  created_at: item.createdAt
+});
+
+const mapFromDb = (dbItem: any): RegistryItem => ({
+  id: dbItem.id,
+  section: dbItem.section,
+  process: dbItem.process,
+  source: dbItem.source,
+  description: dbItem.description,
+  type: dbItem.type,
+  impactQMS: dbItem.impact_qms,
+  likelihood: dbItem.likelihood,
+  severity: dbItem.severity,
+  riskRating: dbItem.risk_rating,
+  riskLevel: dbItem.risk_level,
+  existingControls: dbItem.existing_controls,
+  expectedBenefit: dbItem.expected_benefit,
+  feasibility: dbItem.feasibility,
+  actionPlans: dbItem.action_plans || [],
+  residualLikelihood: dbItem.residual_likelihood,
+  residualSeverity: dbItem.residual_severity,
+  residualRiskRating: dbItem.residual_risk_rating,
+  residualRiskLevel: dbItem.residual_risk_level,
+  effectivenessRemarks: dbItem.effectiveness_remarks,
+  reassessmentDate: dbItem.reassessment_date,
+  status: dbItem.status,
+  createdAt: dbItem.created_at
+});
+
 const SECTIONS = [
   'QA (Quality Assurance)',
   'Admitting Section',
@@ -123,86 +185,6 @@ const SOURCES = [
   'Performance Review',
   'Trends',
   'Others'
-];
-
-// --- Mock Data ---
-
-const MOCK_DATA: RegistryItem[] = [
-  {
-    id: 'R-2024-001',
-    section: 'Emergency Room Complex',
-    process: 'Medication Administration',
-    source: 'Incidents',
-    description: 'Potential for medication error due to similar look-alike sound-alike ampules.',
-    type: 'RISK',
-    impactQMS: 'Patient Safety Breach leading to Sentinel Event',
-    likelihood: 3,
-    severity: 4,
-    riskRating: 12,
-    riskLevel: 'HIGH',
-    existingControls: 'Double check policy, separate storage bins.',
-    actionPlans: [
-      {
-        id: 'AP-1',
-        strategy: 'Mitigate',
-        description: 'Implement barcode scanning for high-alert meds',
-        evidence: 'System Log Report',
-        responsiblePerson: 'Head Nurse',
-        targetDate: '2024-06-30',
-        status: 'COMPLETED',
-        completionRemarks: 'Scanners installed and training completed.'
-      }
-    ],
-    status: 'REASSESSMENT',
-    createdAt: '2024-05-01'
-  },
-  {
-    id: 'O-2024-002',
-    section: 'Admitting Section',
-    process: 'Patient Registration',
-    source: 'Trends',
-    description: 'Implement self-service kiosk for outpatient registration.',
-    type: 'OPPORTUNITY',
-    expectedBenefit: 'Reduce waiting time by 30% and improve patient flow.',
-    feasibility: 'HIGH',
-    impactQMS: 'Improved Patient Satisfaction',
-    actionPlans: [
-      {
-        id: 'AP-3',
-        strategy: 'Enhance',
-        description: 'Procure 2 kiosk units for trial',
-        evidence: 'Purchase Order / Delivery Receipt',
-        responsiblePerson: 'IT Head',
-        targetDate: '2024-08-15',
-        status: 'APPROVED'
-      }
-    ],
-    status: 'IMPLEMENTATION',
-    createdAt: '2024-05-10'
-  },
-  {
-    id: 'R-2023-088',
-    section: 'Emergency Room Complex',
-    process: 'Triage',
-    source: 'Internal Audit',
-    description: 'Delay in triage categorization during peak hours.',
-    type: 'RISK',
-    impactQMS: 'Delayed treatment for critical patients',
-    likelihood: 4,
-    severity: 3,
-    riskRating: 12,
-    riskLevel: 'HIGH',
-    existingControls: 'Triage officer assigned.',
-    actionPlans: [],
-    status: 'CLOSED',
-    createdAt: '2023-11-01',
-    residualLikelihood: 2,
-    residualSeverity: 2,
-    residualRiskRating: 4,
-    residualRiskLevel: 'LOW',
-    effectivenessRemarks: 'Additional staff hired.',
-    reassessmentDate: '2024-01-15'
-  }
 ];
 
 // --- Helpers & Dictionaries ---
@@ -302,7 +284,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-osmak-50 to-osmak-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="bg-osmak-900 p-8 text-white text-center">
           <div className="flex justify-center mb-4">
@@ -1613,8 +1595,8 @@ const QADashboard = ({ entries, onItemClick }: { entries: RegistryItem[], onItem
 };
 
 const RecentActivity = ({ entries, onItemClick }: { entries: RegistryItem[], onItemClick: (i: RegistryItem) => void }) => {
-  // Sort by some criteria, for now just use the list order assuming mock data is recent
-  const sortedEntries = [...entries].reverse();
+  // Sort by created_at desc
+  const sortedEntries = [...entries].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -1676,38 +1658,71 @@ const App = () => {
   
   const [view, setView] = useState<'DASHBOARD' | 'WIZARD' | 'RISKS' | 'OPPORTUNITIES' | 'RECENT_ACTIVITY' | 'ALL_OPEN_RISKS' | 'ALL_OPEN_OPPS'>('DASHBOARD');
   
-  // Use LocalStorage for persistence
-  const [entries, setEntries] = useState<RegistryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem('osmak-registry-data');
-      return saved ? JSON.parse(saved) : MOCK_DATA;
-    } catch (e) {
-      console.error("Failed to load local storage", e);
-      return MOCK_DATA;
-    }
-  });
-
+  // Data State
+  const [entries, setEntries] = useState<RegistryItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
 
-  // Save to LocalStorage whenever entries change
+  // Fetch Data from Supabase
+  const fetchEntries = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('registry_items').select('*');
+    if (error) {
+      console.error('Error fetching data:', error);
+      alert('Failed to connect to database. Please check configuration.');
+    } else {
+      setEntries(data.map(mapFromDb));
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    localStorage.setItem('osmak-registry-data', JSON.stringify(entries));
-  }, [entries]);
+    fetchEntries();
+  }, []);
 
   const handleLogin = (section: string) => {
     setUser(section);
     setIsQA(section.includes('QA'));
   };
 
-  const handleUpdateItem = (updated: RegistryItem) => {
+  const handleUpdateItem = async (updated: RegistryItem) => {
+    // Optimistic Update
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    setSelectedItem(updated); 
+    setSelectedItem(updated);
+
+    // DB Update
+    const { error } = await supabase
+      .from('registry_items')
+      .update(mapToDb(updated))
+      .eq('id', updated.id);
+
+    if (error) {
+      console.error("Update failed", error);
+      alert("Failed to save changes to database.");
+      fetchEntries(); // Revert
+    }
   };
 
-  const handleSubmitEntry = (entry: RegistryItem) => {
+  const handleSubmitEntry = async (entry: RegistryItem) => {
+    // Optimistic Update
     setEntries([entry, ...entries]);
     setView('DASHBOARD');
+
+    // DB Insert
+    const { error } = await supabase
+      .from('registry_items')
+      .insert([mapToDb(entry)]);
+
+    if (error) {
+      console.error("Insert failed", error);
+      alert("Failed to create entry in database.");
+      fetchEntries(); // Revert
+    }
   };
+
+  if (loading && !user) {
+     return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-osmak-700 font-bold gap-2"><Loader2 className="animate-spin" /> Loading Registry System...</div>;
+  }
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
@@ -1777,7 +1792,9 @@ const App = () => {
 
       {/* Main Content */}
       <main className="flex-1 md:ml-64 p-8">
-        {isQA ? (
+        {loading ? (
+           <div className="flex items-center justify-center h-full text-gray-500"><Loader2 className="animate-spin mr-2"/> Syncing...</div>
+        ) : isQA ? (
           view === 'RECENT_ACTIVITY' ? (
              <RecentActivity entries={entries} onItemClick={setSelectedItem} />
           ) : qaSelectedSection ? (
