@@ -93,6 +93,7 @@ interface RegistryItem {
   // Meta
   status: WorkflowStatus;
   createdAt: string;
+  closedAt?: string;
 }
 
 // --- Data Mapping Helpers (CamelCase <-> SnakeCase) ---
@@ -120,7 +121,8 @@ const mapToDb = (item: RegistryItem) => ({
   effectiveness_remarks: item.effectivenessRemarks,
   reassessment_date: item.reassessmentDate,
   status: item.status,
-  created_at: item.createdAt
+  created_at: item.createdAt,
+  closed_at: item.closedAt
 });
 
 const mapFromDb = (dbItem: any): RegistryItem => ({
@@ -146,7 +148,8 @@ const mapFromDb = (dbItem: any): RegistryItem => ({
   effectivenessRemarks: dbItem.effectiveness_remarks,
   reassessmentDate: dbItem.reassessment_date,
   status: dbItem.status,
-  createdAt: dbItem.created_at
+  createdAt: dbItem.created_at,
+  closedAt: dbItem.closed_at
 });
 
 const SECTIONS = [
@@ -430,7 +433,8 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
     onUpdate({ 
       ...item, 
       status: 'CLOSED',
-      effectivenessRemarks: finalRemarks 
+      effectivenessRemarks: finalRemarks,
+      closedAt: new Date().toISOString().split('T')[0]
     });
   };
 
@@ -878,7 +882,9 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
 
             {item.status === 'CLOSED' && (
               <div className="space-y-4">
-                <p className="text-green-700 font-medium flex items-center gap-2"><CheckCircle2 size={18} /> This entry is verified and closed.</p>
+                <p className="text-green-700 font-medium flex items-center gap-2">
+                  <CheckCircle2 size={18} /> This entry is verified and closed on {item.closedAt}.
+                </p>
                 {item.effectivenessRemarks && (
                    <div className="bg-white p-3 border rounded text-sm text-gray-600">
                       <strong>QA/Final Remarks:</strong> {item.effectivenessRemarks}
