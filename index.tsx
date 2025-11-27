@@ -8,6 +8,8 @@ import {
   FileText, 
   LogOut, 
   ChevronRight, 
+  ChevronDown,
+  ChevronUp,
   CheckCircle2, 
   AlertTriangle,
   Activity,
@@ -25,7 +27,10 @@ import {
   Menu,
   ListFilter,
   History,
-  ClipboardList
+  ClipboardList,
+  RotateCcw,
+  Layers,
+  MessageSquare
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -33,16 +38,17 @@ import {
 type EntryType = 'RISK' | 'OPPORTUNITY';
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 type WorkflowStatus = 'PLAN_REVIEW' | 'IMPLEMENTATION' | 'REASSESSMENT' | 'QA_VERIFICATION' | 'CLOSED';
-type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'COMPLETED';
+type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
 
 interface ActionPlan {
   id: string;
   strategy: string; 
   description: string;
-  evidence: string; // New field
+  evidence: string;
   responsiblePerson: string;
   targetDate: string;
   status: ActionStatus;
+  completionRemarks?: string; // New field for user completion notes
 }
 
 interface RegistryItem {
@@ -143,7 +149,8 @@ const MOCK_DATA: RegistryItem[] = [
         evidence: 'System Log Report',
         responsiblePerson: 'Head Nurse',
         targetDate: '2024-06-30',
-        status: 'COMPLETED'
+        status: 'COMPLETED',
+        completionRemarks: 'Scanners installed and training completed.'
       }
     ],
     status: 'REASSESSMENT',
@@ -267,6 +274,27 @@ const formatStatus = (status: WorkflowStatus) => {
   return status.replace('_', ' ');
 }
 
+// Calculate days remaining to target date
+const getDaysRemaining = (item: RegistryItem): { days: number, label: string, color: string } | null => {
+  if (item.status === 'CLOSED' || item.actionPlans.length === 0) return null;
+  
+  // Find closest target date of active plans
+  const activePlans = item.actionPlans.filter(p => p.status !== 'COMPLETED');
+  if (activePlans.length === 0) return null;
+
+  const targetDates = activePlans.map(p => new Date(p.targetDate).getTime());
+  const nearest = Math.min(...targetDates);
+  const now = new Date().getTime();
+  const diffTime = nearest - now;
+  const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  
+  let color = 'text-green-600';
+  if (days < 0) color = 'text-red-600 font-bold';
+  else if (days < 7) color = 'text-orange-600 font-bold';
+
+  return { days, label: days < 0 ? `${Math.abs(days)} days overdue` : `${days} days left`, color };
+};
+
 // --- Components ---
 
 const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
@@ -295,7 +323,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
               <select 
                 value={section} 
                 onChange={(e) => setSection(e.target.value)}
-                className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 focus:border-transparent outline-none transition text-sm"
+                className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 focus:border-transparent outline-none transition text-sm bg-white text-gray-900"
               >
                 {SECTIONS.filter(s => !s.startsWith('QA')).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -310,7 +338,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input 
               type="password" 
-              className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 outline-none"
+              className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 outline-none bg-white text-gray-900"
               placeholder="••••••••"
               defaultValue="demo123"
             />
@@ -336,30 +364,44 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
   const [isAddingPlan, setIsAddingPlan] = useState(false);
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
 
+  // State for user marking action plan as completed (adding remarks)
+  const [completingActionId, setCompletingActionId] = useState<string | null>(null);
+  const [completionRemarks, setCompletionRemarks] = useState('');
+
   // Computed Risk Level for Reassessment Form
   const reassessmentRiskRating = reassessment.likelihood * reassessment.severity;
   const reassessmentRiskLevel = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
 
-  const handleActionStatusChange = (actionId: string, newStatus: ActionStatus) => {
+  const handleActionStatusChange = (actionId: string, newStatus: ActionStatus, remarks?: string) => {
     const updatedActions = item.actionPlans.map(ap => 
-      ap.id === actionId ? { ...ap, status: newStatus } : ap
+      ap.id === actionId ? { ...ap, status: newStatus, completionRemarks: remarks || ap.completionRemarks } : ap
     );
     
     let nextStatus = item.status;
     
     if (isQA && item.status === 'PLAN_REVIEW') {
-      // If all are approved/completed, move to implementation
-      // If any are REVISION_REQUIRED, stay in PLAN_REVIEW
       const allApproved = updatedActions.every(a => a.status === 'APPROVED' || a.status === 'COMPLETED');
       if (allApproved) nextStatus = 'IMPLEMENTATION';
     }
 
     if (isQA && item.status === 'IMPLEMENTATION') {
       const allCompleted = updatedActions.every(a => a.status === 'COMPLETED');
-      if (allCompleted) nextStatus = 'REASSESSMENT';
+      if (allCompleted) {
+         if (item.type === 'RISK') {
+            nextStatus = 'REASSESSMENT';
+         } else {
+            nextStatus = 'QA_VERIFICATION';
+         }
+      }
     }
 
     onUpdate({ ...item, actionPlans: updatedActions, status: nextStatus });
+    setCompletingActionId(null);
+    setCompletionRemarks('');
+  };
+
+  const handleUserMarkCompleted = (actionId: string) => {
+    handleActionStatusChange(actionId, 'FOR_VERIFICATION', completionRemarks);
   };
 
   const handleSubmitReassessment = () => {
@@ -376,7 +418,16 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
   };
 
   const handleFinalClose = () => {
-    onUpdate({ ...item, status: 'CLOSED' });
+    const finalRemarks = reassessment.remarks || item.effectivenessRemarks;
+    onUpdate({ 
+      ...item, 
+      status: 'CLOSED',
+      effectivenessRemarks: finalRemarks 
+    });
+  };
+
+  const handleRejectReassessment = () => {
+    onUpdate({ ...item, status: 'REASSESSMENT' });
   };
 
   const handleAddPlanInModal = () => {
@@ -535,43 +586,98 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                   {item.actionPlans.length === 0 ? (
                     <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No action plans recorded.</td></tr>
                   ) : item.actionPlans.map(ap => (
-                    <tr key={ap.id} className="hover:bg-gray-50 transition">
-                      <td className="px-4 py-3 text-xs font-bold uppercase text-gray-600 align-top pt-4">{ap.strategy}</td>
-                      <td className="px-4 py-3 font-medium align-top pt-4">{ap.description}</td>
-                      <td className="px-4 py-3 text-gray-600 align-top pt-4 italic">{ap.evidence}</td>
-                      <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.responsiblePerson}</td>
-                      <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.targetDate}</td>
-                      <td className="px-4 py-3 align-top pt-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          ap.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                          ap.status === 'APPROVED' ? 'bg-blue-100 text-blue-800' :
-                          ap.status === 'REVISION_REQUIRED' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>{ap.status.replace('_', ' ')}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right align-top pt-4">
-                        {isQA ? (
-                          <div className="flex flex-col gap-2 items-end">
-                            {item.status === 'PLAN_REVIEW' && ap.status === 'PENDING_APPROVAL' && (
-                              <>
-                                <button onClick={() => handleActionStatusChange(ap.id, 'APPROVED')} className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 px-2 py-1 rounded">Approve</button>
-                                <button onClick={() => handleActionStatusChange(ap.id, 'REVISION_REQUIRED')} className="text-red-600 hover:text-red-800 text-xs font-bold border border-red-200 px-2 py-1 rounded">Revise</button>
-                              </>
-                            )}
-                            {item.status === 'IMPLEMENTATION' && (ap.status === 'APPROVED' || ap.status === 'PENDING_APPROVAL') && (
-                              <button onClick={() => handleActionStatusChange(ap.id, 'COMPLETED')} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm">For Reassessment</button>
-                            )}
-                          </div>
-                        ) : (
-                          // User Controls
-                          item.status === 'PLAN_REVIEW' && (
-                            <button onClick={() => handleDeletePlan(ap.id)} className="text-red-500 hover:text-red-700 p-1">
-                              <Trash2 size={16} />
-                            </button>
-                          )
-                        )}
-                      </td>
-                    </tr>
+                    <React.Fragment key={ap.id}>
+                      <tr className="hover:bg-gray-50 transition">
+                        <td className="px-4 py-3 text-xs font-bold uppercase text-gray-600 align-top pt-4">{ap.strategy}</td>
+                        <td className="px-4 py-3 font-medium align-top pt-4">
+                          {ap.description}
+                          {ap.completionRemarks && (
+                            <div className="mt-2 text-xs bg-gray-100 p-2 rounded text-gray-700">
+                              <span className="font-bold">Completion Remarks:</span> {ap.completionRemarks}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 align-top pt-4 italic">{ap.evidence}</td>
+                        <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.responsiblePerson}</td>
+                        <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.targetDate}</td>
+                        <td className="px-4 py-3 align-top pt-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            ap.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                            ap.status === 'APPROVED' ? 'bg-blue-100 text-blue-800' :
+                            ap.status === 'REVISION_REQUIRED' ? 'bg-red-100 text-red-800' :
+                            ap.status === 'FOR_VERIFICATION' ? 'bg-purple-100 text-purple-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>{ap.status === 'FOR_VERIFICATION' ? 'FOR VERIFICATION' : ap.status.replace('_', ' ')}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right align-top pt-4">
+                          {isQA ? (
+                            <div className="flex flex-col gap-2 items-end">
+                              {item.status === 'PLAN_REVIEW' && ap.status === 'PENDING_APPROVAL' && (
+                                <>
+                                  <button onClick={() => handleActionStatusChange(ap.id, 'APPROVED')} className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 px-2 py-1 rounded">Approve</button>
+                                  <button onClick={() => handleActionStatusChange(ap.id, 'REVISION_REQUIRED')} className="text-red-600 hover:text-red-800 text-xs font-bold border border-red-200 px-2 py-1 rounded">Revise</button>
+                                </>
+                              )}
+                              {/* QA Verifies User's Implementation */}
+                              {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_VERIFICATION' && (
+                                <button onClick={() => handleActionStatusChange(ap.id, 'COMPLETED')} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700 shadow-sm flex items-center gap-1">
+                                  <CheckCircle2 size={12} /> Verify Completion
+                                </button>
+                              )}
+                              {item.status === 'IMPLEMENTATION' && ap.status === 'APPROVED' && (
+                                <span className="text-xs text-gray-400 italic">Waiting for user...</span>
+                              )}
+                            </div>
+                          ) : (
+                            // User Controls
+                            <>
+                              {item.status === 'PLAN_REVIEW' && (
+                                <button onClick={() => handleDeletePlan(ap.id)} className="text-red-500 hover:text-red-700 p-1">
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                              {item.status === 'IMPLEMENTATION' && (ap.status === 'APPROVED' || ap.status === 'REVISION_REQUIRED') && !completingActionId && (
+                                <button onClick={() => setCompletingActionId(ap.id)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm">
+                                  Mark Implemented
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                      {/* User Remark Input Form */}
+                      {completingActionId === ap.id && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-4 bg-green-50">
+                            <div className="flex gap-4 items-end">
+                              <div className="flex-1">
+                                <label className="block text-xs font-bold text-green-800 mb-1">Completion Remarks (Required)</label>
+                                <input 
+                                  type="text" 
+                                  className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
+                                  placeholder="e.g. Installed software on May 20, 2024. Evidence attached."
+                                  value={completionRemarks}
+                                  onChange={e => setCompletionRemarks(e.target.value)}
+                                />
+                              </div>
+                              <button 
+                                onClick={() => handleUserMarkCompleted(ap.id)}
+                                disabled={!completionRemarks}
+                                className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50"
+                              >
+                                Submit for Verification
+                              </button>
+                              <button 
+                                onClick={() => { setCompletingActionId(null); setCompletionRemarks(''); }}
+                                className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -584,7 +690,7 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                  <div className="space-y-3">
                    <div>
                      <select 
-                       className="w-full p-2 border rounded"
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.strategy}
                        onChange={e => setNewPlan({...newPlan, strategy: e.target.value})}
                      >
@@ -594,14 +700,14 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                    </div>
                    <textarea 
                      placeholder="Action Steps..."
-                     className="w-full p-2 border rounded"
+                     className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                      value={newPlan.description}
                      onChange={e => setNewPlan({...newPlan, description: e.target.value})}
                    />
                    <input 
                      type="text" 
-                     placeholder="Evidence / Verification (e.g. Photo log, Certificate)"
-                     className="w-full p-2 border rounded"
+                     placeholder="Verification / Evidence (e.g. Photo log, Certificate)"
+                     className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                      value={newPlan.evidence}
                      onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
                    />
@@ -609,13 +715,13 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                      <input 
                        type="text" 
                        placeholder="Responsible Person"
-                       className="w-full p-2 border rounded"
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.responsiblePerson}
                        onChange={e => setNewPlan({...newPlan, responsiblePerson: e.target.value})}
                      />
                      <input 
                        type="date" 
-                       className="w-full p-2 border rounded"
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.targetDate}
                        onChange={e => setNewPlan({...newPlan, targetDate: e.target.value})}
                      />
@@ -653,12 +759,17 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
             )}
 
             {item.status === 'IMPLEMENTATION' && (
-              <p className="text-slate-700 flex items-center gap-2"><Activity size={18} /> Actions are being implemented. QA will mark them as completed when evidence is shown.</p>
+              <p className="text-slate-700 flex items-center gap-2">
+                <Activity size={18} /> 
+                {item.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION') 
+                   ? "Pending QA Verification of implemented actions." 
+                   : "Actions are being implemented. Mark as implemented when done."}
+              </p>
             )}
 
-            {item.status === 'REASSESSMENT' && !isQA && (
+            {item.status === 'REASSESSMENT' && item.type === 'RISK' && !isQA && (
               <div className="space-y-6 animate-fadeIn">
-                <p className="text-amber-700 font-medium">All actions completed. Please perform reassessment.</p>
+                <p className="text-amber-700 font-medium">All actions verified by QA. Please perform reassessment.</p>
                 
                 {/* Reassessment Sliders & Matrix */}
                 <div className="grid grid-cols-2 gap-8 pt-2">
@@ -705,7 +816,7 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
 
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks on Effectiveness</label>
-                  <textarea className="w-full border rounded p-2 h-20" placeholder="Why was the action effective? Describe residual risk."
+                  <textarea className="w-full border rounded p-2 h-20 bg-white text-gray-900 border-gray-300" placeholder="Why was the action effective? Describe residual risk."
                     value={reassessment.remarks} onChange={e => setReassessment({...reassessment, remarks: e.target.value})} />
                 </div>
                 <button onClick={handleSubmitReassessment} className="w-full bg-amber-600 text-white py-2 rounded font-bold hover:bg-amber-700">
@@ -714,25 +825,58 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
               </div>
             )}
 
+            {item.status === 'QA_VERIFICATION' && !isQA && item.type === 'OPPORTUNITY' && (
+               <p className="text-slate-700 flex items-center gap-2"><Clock size={18} /> Actions Verified. Waiting for QA to Close Opportunity.</p>
+            )}
+
             {item.status === 'QA_VERIFICATION' && isQA && (
               <div className="space-y-4">
-                 <div className="bg-indigo-50 p-4 rounded border border-indigo-100">
-                    <h4 className="font-bold text-indigo-900 mb-2">Reassessment Data Submitted</h4>
-                    <p className="text-sm">Residual Rating: <strong>{item.residualLikelihood} x {item.residualSeverity} = {item.residualRiskRating} ({item.residualRiskLevel})</strong></p>
-                    <p className="text-sm mt-1">Remarks: {item.effectivenessRemarks}</p>
-                 </div>
-                 <button onClick={handleFinalClose} className="w-full bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">
-                   Verify & Close Registry Entry
-                 </button>
+                 {item.type === 'RISK' ? (
+                   <>
+                    <div className="bg-indigo-50 p-4 rounded border border-indigo-100">
+                        <h4 className="font-bold text-indigo-900 mb-2">Reassessment Data Submitted</h4>
+                        <p className="text-sm">Residual Rating: <strong>{item.residualLikelihood} x {item.residualSeverity} = {item.residualRiskRating} ({item.residualRiskLevel})</strong></p>
+                        <p className="text-sm mt-1">Remarks: {item.effectivenessRemarks}</p>
+                    </div>
+                    <div className="flex gap-4">
+                        <button onClick={handleRejectReassessment} className="flex-1 border border-red-300 text-red-700 py-2 rounded font-bold hover:bg-red-50 flex items-center justify-center gap-2">
+                          <RotateCcw size={16} /> Reject & Request Re-Eval
+                        </button>
+                        <button onClick={handleFinalClose} className="flex-[2] bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">
+                          Verify & Close Registry Entry
+                        </button>
+                    </div>
+                   </>
+                 ) : (
+                    <div className="space-y-4">
+                       <h4 className="font-bold text-indigo-900 border-b border-indigo-100 pb-2">Final Opportunity Review</h4>
+                       <p className="text-sm text-gray-600">All actions for this opportunity have been verified. Please add remarks and close.</p>
+                       <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">QA Remarks</label>
+                          <textarea 
+                            className="w-full border rounded p-2 h-24 bg-white text-gray-900 border-gray-300" 
+                            placeholder="Final remarks on the opportunity outcome..."
+                            value={reassessment.remarks} 
+                            onChange={e => setReassessment({...reassessment, remarks: e.target.value})} 
+                          />
+                       </div>
+                       <button onClick={handleFinalClose} className="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700">
+                          Close Opportunity
+                       </button>
+                    </div>
+                 )}
               </div>
             )}
 
             {item.status === 'CLOSED' && (
               <div className="space-y-4">
                 <p className="text-green-700 font-medium flex items-center gap-2"><CheckCircle2 size={18} /> This entry is verified and closed.</p>
-                {item.residualRiskRating && (
+                {item.effectivenessRemarks && (
                    <div className="bg-white p-3 border rounded text-sm text-gray-600">
-                      <strong>Final Status:</strong> Residual Risk {item.residualRiskRating} ({item.residualRiskLevel}) - {item.effectivenessRemarks}
+                      <strong>QA/Final Remarks:</strong> {item.effectivenessRemarks}
+                      {item.type === 'RISK' && item.residualRiskRating && (
+                         <span className="block mt-1">Residual Risk Level: {item.residualRiskLevel} ({item.residualRiskRating})</span>
+                      )}
                    </div>
                 )}
               </div>
@@ -823,7 +967,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
           <select 
-            className="w-full p-3 border rounded-lg bg-white"
+            className="w-full p-3 border rounded-lg bg-white text-gray-900 border-gray-300"
             value={data.source}
             onChange={(e) => handleChange('source', e.target.value)}
           >
@@ -834,7 +978,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
             <input 
               type="text" 
               placeholder="Please specify..."
-              className="w-full p-3 border rounded-lg mt-2 bg-gray-50"
+              className="w-full p-3 border rounded-lg mt-2 bg-white text-gray-900 border-gray-300"
               value={otherSource}
               onChange={(e) => setOtherSource(e.target.value)}
             />
@@ -845,7 +989,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
         <label className="block text-sm font-medium text-gray-700 mb-1">Process / Function</label>
         <input 
           type="text" 
-          className="w-full p-3 border rounded-lg"
+          className="w-full p-3 border rounded-lg bg-white text-gray-900 border-gray-300"
           placeholder="e.g., Patient Admission, Drug Dispensing"
           value={data.process}
           onChange={(e) => handleChange('process', e.target.value)}
@@ -854,7 +998,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Description of {data.type === 'RISK' ? 'Risk' : 'Opportunity'}</label>
         <textarea 
-          className="w-full p-3 border rounded-lg h-32"
+          className="w-full p-3 border rounded-lg h-32 bg-white text-gray-900 border-gray-300"
           placeholder={`Describe the ${data.type?.toLowerCase()} clearly...`}
           value={data.description}
           onChange={(e) => handleChange('description', e.target.value)}
@@ -870,7 +1014,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Potential Impact on QMS / Patient Safety</label>
             <textarea 
-              className="w-full p-3 border rounded-lg h-24"
+              className="w-full p-3 border rounded-lg h-24 bg-white text-gray-900 border-gray-300"
               placeholder="What happens if this risk materializes?"
               value={data.impactQMS}
               onChange={(e) => handleChange('impactQMS', e.target.value)}
@@ -879,7 +1023,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Existing Controls / Current Mitigation</label>
             <textarea 
-              className="w-full p-3 border rounded-lg h-24"
+              className="w-full p-3 border rounded-lg h-24 bg-white text-gray-900 border-gray-300"
               placeholder="What mechanisms are currently in place?"
               value={data.existingControls}
               onChange={(e) => handleChange('existingControls', e.target.value)}
@@ -936,7 +1080,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Expected Benefit</label>
             <textarea 
-              className="w-full p-3 border rounded-lg h-32"
+              className="w-full p-3 border rounded-lg h-32 bg-white text-gray-900 border-gray-300"
               placeholder="What is the positive outcome?"
               value={data.expectedBenefit}
               onChange={(e) => handleChange('expectedBenefit', e.target.value)}
@@ -945,7 +1089,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Feasibility</label>
             <select 
-              className="w-full p-3 border rounded-lg"
+              className="w-full p-3 border rounded-lg bg-white text-gray-900 border-gray-300"
               value={data.feasibility}
               onChange={(e) => handleChange('feasibility', e.target.value)}
             >
@@ -1028,7 +1172,7 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
              <div className="space-y-3">
                <div>
                  <select 
-                   className="w-full p-2 border rounded"
+                   className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                    value={tempAction.strategy}
                    onChange={e => setTempAction({...tempAction, strategy: e.target.value})}
                  >
@@ -1044,14 +1188,14 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
                </div>
                <textarea 
                  placeholder="Specific action steps..."
-                 className="w-full p-2 border rounded"
+                 className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                  value={tempAction.description}
                  onChange={e => setTempAction({...tempAction, description: e.target.value})}
                />
                <input 
                  type="text" 
                  placeholder="Verification / Evidence (e.g., Photo log, Certificate)"
-                 className="w-full p-2 border rounded"
+                 className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                  value={tempAction.evidence}
                  onChange={e => setTempAction({...tempAction, evidence: e.target.value})}
                />
@@ -1059,13 +1203,13 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
                  <input 
                    type="text" 
                    placeholder="Responsible Person"
-                   className="w-full p-2 border rounded"
+                   className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                    value={tempAction.responsiblePerson}
                    onChange={e => setTempAction({...tempAction, responsiblePerson: e.target.value})}
                  />
                  <input 
                    type="date" 
-                   className="w-full p-2 border rounded"
+                   className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                    value={tempAction.targetDate}
                    onChange={e => setTempAction({...tempAction, targetDate: e.target.value})}
                  />
@@ -1091,7 +1235,21 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
   ];
 
   const canSubmit = () => {
-    if (step < 3) return true; // Only validate on step 3 logic
+    if (step === 1) {
+       // Step 1 Validation
+       if (!data.description || !data.process || !data.source) return false;
+       if (data.source === 'Others' && !otherSource) return false;
+       return true;
+    }
+    if (step === 2) {
+       // Step 2 Validation
+       if (data.type === 'RISK') {
+          return !!data.impactQMS && !!data.existingControls;
+       } else {
+          return !!data.expectedBenefit;
+       }
+    }
+    // Step 3 Validation
     if (needsMandatoryAction && (!data.actionPlans || data.actionPlans.length === 0)) return false;
     return true;
   };
@@ -1160,7 +1318,11 @@ const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: ()
   );
 };
 
-const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OVERVIEW', readOnly }: { sectionName: string, entries: RegistryItem[], onNewEntry: () => void, onItemClick: (i: RegistryItem) => void, mode?: 'OVERVIEW' | 'RISKS' | 'OPPORTUNITIES', readOnly?: boolean }) => {
+const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OVERVIEW', readOnly }: { sectionName: string, entries: RegistryItem[], onNewEntry: () => void, onItemClick: (i: RegistryItem) => void, mode?: 'OVERVIEW' | 'RISKS' | 'OPPORTUNITIES' | 'ALL_OPEN_RISKS' | 'ALL_OPEN_OPPS', readOnly?: boolean }) => {
+  // State for collapsible QA section views
+  const [showClosedRisks, setShowClosedRisks] = useState(false);
+  const [showClosedOpps, setShowClosedOpps] = useState(false);
+
   // --- Stats Calculation ---
   const totalHighRisk = entries.filter(e => e.type === 'RISK' && (e.riskLevel === 'HIGH' || e.riskLevel === 'CRITICAL')).length;
   const openHighRisk = entries.filter(e => e.type === 'RISK' && (e.riskLevel === 'HIGH' || e.riskLevel === 'CRITICAL') && e.status !== 'CLOSED').length;
@@ -1168,19 +1330,12 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
   const totalOpenOpp = entries.filter(e => e.type === 'OPPORTUNITY' && e.status !== 'CLOSED').length;
 
   // --- Filtered Lists based on Mode ---
-  
-  // Dashboard Mode: Open Risks, Open Opportunities
   const openRisks = entries.filter(e => e.type === 'RISK' && e.status !== 'CLOSED');
   const openOpps = entries.filter(e => e.type === 'OPPORTUNITY' && e.status !== 'CLOSED');
-
-  // Risks Mode: Open Risks, Closed Risks
   const closedRisks = entries.filter(e => e.type === 'RISK' && e.status === 'CLOSED');
-
-  // Opps Mode: Open Opps, Closed Opps
   const closedOpps = entries.filter(e => e.type === 'OPPORTUNITY' && e.status === 'CLOSED');
 
-
-  const Table = ({ items, title, icon }: { items: RegistryItem[], title: string, icon: React.ReactNode }) => (
+  const Table = ({ items, title, icon, showDays = false }: { items: RegistryItem[], title: string, icon: React.ReactNode, showDays?: boolean }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       <div className="p-6 border-b border-gray-100 flex items-center gap-2">
         {icon}
@@ -1191,17 +1346,22 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
           <thead className="bg-gray-50 text-gray-500 uppercase font-medium text-xs">
             <tr>
               <th className="px-6 py-4">ID</th>
+              {mode.includes('ALL') && <th className="px-6 py-4">Section</th>}
               <th className="px-6 py-4">Description</th>
               <th className="px-6 py-4">Rating/Feasibility</th>
               <th className="px-6 py-4">Action Plans</th>
+              {showDays && <th className="px-6 py-4">Due In</th>}
               <th className="px-6 py-4">Status</th>
               <th className="px-6 py-4"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.map(entry => (
+            {items.map(entry => {
+              const daysRemaining = showDays ? getDaysRemaining(entry) : null;
+              return (
               <tr key={entry.id} onClick={() => onItemClick(entry)} className="hover:bg-gray-50 transition cursor-pointer group">
                 <td className="px-6 py-4 font-mono text-gray-500">{entry.id}</td>
+                {mode.includes('ALL') && <td className="px-6 py-4 font-medium text-gray-900">{entry.section}</td>}
                 <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate">{entry.description}</td>
                 <td className="px-6 py-4">
                   {entry.type === 'RISK' ? (
@@ -1215,6 +1375,15 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
                     <ClipboardCheck size={12} /> {entry.actionPlans.length}
                   </span>
                 </td>
+                {showDays && (
+                   <td className="px-6 py-4">
+                      {daysRemaining ? (
+                        <span className={`text-xs ${daysRemaining.color}`}>{daysRemaining.label}</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                   </td>
+                )}
                 <td className="px-6 py-4">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(entry.status)}`}>
                     {formatStatus(entry.status)}
@@ -1224,7 +1393,7 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
                   <ChevronRight size={16} />
                 </td>
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
         {items.length === 0 && <div className="p-8 text-center text-gray-500">No entries found.</div>}
@@ -1242,7 +1411,9 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
             {mode === 'RISKS' && 'Risk Registry'}
             {mode === 'OPPORTUNITIES' && 'Opportunities Registry'}
           </h1>
-          <p className="text-gray-500">Overview for <span className="font-semibold text-osmak-700">{sectionName}</span></p>
+          <p className="text-gray-500">
+            Overview for <span className="font-semibold text-osmak-700">{sectionName}</span>
+          </p>
         </div>
         {!readOnly && (
           <button 
@@ -1254,7 +1425,7 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
         )}
       </div>
 
-      {/* Stats Cards - Only on Overview or Relevant Modes? User asked to add open high/critical to dashboard. */}
+      {/* Stats Cards - Only on Overview */}
       {mode === 'OVERVIEW' && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-red-50 p-5 rounded-xl border border-red-100">
@@ -1279,21 +1450,64 @@ const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OV
       {/* Tables based on Mode */}
       {mode === 'OVERVIEW' && (
         <>
-          <Table items={openRisks} title="Open Risks Registry" icon={<ShieldAlert className="text-red-600"/>} />
-          <Table items={openOpps} title="Open Opportunities Registry" icon={<Lightbulb className="text-green-600"/>} />
+          <Table items={openRisks} title="Open Risks Registry" icon={<ShieldAlert className="text-red-600"/>} showDays={true} />
+          <Table items={openOpps} title="Open Opportunities Registry" icon={<Lightbulb className="text-green-600"/>} showDays={true} />
+          
+          {/* Collapsible Closed Registries for QA View */}
+          {readOnly && (
+            <div className="space-y-4 pt-8 border-t">
+               <h3 className="text-lg font-bold text-gray-500 uppercase tracking-wide">Closed Registries</h3>
+               
+               {/* Closed Risks */}
+               <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+                 <button 
+                  onClick={() => setShowClosedRisks(!showClosedRisks)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
+                 >
+                    <div className="flex items-center gap-2 font-bold text-gray-700">
+                       <CheckCircle2 size={18} /> Closed Risks Registry ({closedRisks.length})
+                    </div>
+                    {showClosedRisks ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                 </button>
+                 {showClosedRisks && (
+                    <div className="p-4 border-t border-gray-100">
+                        <Table items={closedRisks} title="Closed Risks" icon={<CheckCircle2 className="text-gray-500"/>} />
+                    </div>
+                 )}
+               </div>
+
+               {/* Closed Opportunities */}
+               <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+                 <button 
+                  onClick={() => setShowClosedOpps(!showClosedOpps)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
+                 >
+                    <div className="flex items-center gap-2 font-bold text-gray-700">
+                       <CheckCircle2 size={18} /> Closed Opportunities Registry ({closedOpps.length})
+                    </div>
+                    {showClosedOpps ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                 </button>
+                 {showClosedOpps && (
+                    <div className="p-4 border-t border-gray-100">
+                        <Table items={closedOpps} title="Closed Opportunities" icon={<CheckCircle2 className="text-gray-500"/>} />
+                    </div>
+                 )}
+               </div>
+            </div>
+          )}
         </>
       )}
 
       {mode === 'RISKS' && (
         <>
-          <Table items={openRisks} title="Open Risks Registry" icon={<ShieldAlert className="text-red-600"/>} />
+          <Table items={openRisks} title="Open Risks Registry" icon={<ShieldAlert className="text-red-600"/>} showDays={true} />
           <Table items={closedRisks} title="Closed Risks Registry" icon={<CheckCircle2 className="text-gray-600"/>} />
         </>
       )}
 
       {mode === 'OPPORTUNITIES' && (
         <>
-          <Table items={openOpps} title="Open Opportunities Registry" icon={<Lightbulb className="text-green-600"/>} />
+          <Table items={openOpps} title="Open Opportunities Registry" icon={<Lightbulb className="text-green-600"/>} showDays={true} />
           <Table items={closedOpps} title="Closed Opportunities Registry" icon={<CheckCircle2 className="text-gray-600"/>} />
         </>
       )}
@@ -1309,7 +1523,7 @@ const QADashboard = ({ entries, onItemClick }: { entries: RegistryItem[], onItem
   const forVerification = entries.filter(e => e.status === 'QA_VERIFICATION').length;
 
   // Filter pending tasks for QA (Plan Review or Verification)
-  const pendingTasks = entries.filter(e => e.status === 'PLAN_REVIEW' || e.status === 'QA_VERIFICATION');
+  const pendingTasks = entries.filter(e => e.status === 'PLAN_REVIEW' || e.status === 'QA_VERIFICATION' || e.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION'));
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -1361,14 +1575,23 @@ const QADashboard = ({ entries, onItemClick }: { entries: RegistryItem[], onItem
             <tbody className="divide-y divide-gray-100">
               {pendingTasks.length === 0 ? (
                 <tr><td colSpan={6} className="p-6 text-center text-gray-500">No pending tasks.</td></tr>
-              ) : pendingTasks.map(entry => (
+              ) : pendingTasks.map(entry => {
+                let taskLabel = 'Review Plans';
+                let taskColor = 'text-indigo-600';
+                if (entry.status === 'QA_VERIFICATION') {
+                   taskLabel = 'Final Verification';
+                   taskColor = 'text-purple-600';
+                } else if (entry.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION')) {
+                   taskLabel = 'Verify Implementation';
+                   taskColor = 'text-green-600';
+                }
+
+                return (
                 <tr key={entry.id} onClick={() => onItemClick(entry)} className="hover:bg-gray-50 transition cursor-pointer group">
                   <td className="px-6 py-4 font-medium text-gray-900">{entry.section}</td>
                   <td className="px-6 py-4 font-mono text-gray-500">{entry.id}</td>
                   <td className="px-6 py-4">
-                     <span className={`font-bold ${entry.status === 'PLAN_REVIEW' ? 'text-indigo-600' : 'text-purple-600'}`}>
-                       {entry.status === 'PLAN_REVIEW' ? 'Review Plans' : 'Verify & Close'}
-                     </span>
+                     <span className={`font-bold ${taskColor}`}>{taskLabel}</span>
                   </td>
                   <td className="px-6 py-4 text-gray-500 max-w-xs truncate">{entry.description}</td>
                   <td className="px-6 py-4">
@@ -1380,7 +1603,7 @@ const QADashboard = ({ entries, onItemClick }: { entries: RegistryItem[], onItem
                     <Eye size={16} />
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -1451,9 +1674,25 @@ const App = () => {
   const [isQA, setIsQA] = useState(false);
   const [qaSelectedSection, setQaSelectedSection] = useState<string | null>(null);
   
-  const [view, setView] = useState<'DASHBOARD' | 'WIZARD' | 'RISKS' | 'OPPORTUNITIES' | 'RECENT_ACTIVITY'>('DASHBOARD');
-  const [entries, setEntries] = useState<RegistryItem[]>(MOCK_DATA);
+  const [view, setView] = useState<'DASHBOARD' | 'WIZARD' | 'RISKS' | 'OPPORTUNITIES' | 'RECENT_ACTIVITY' | 'ALL_OPEN_RISKS' | 'ALL_OPEN_OPPS'>('DASHBOARD');
+  
+  // Use LocalStorage for persistence
+  const [entries, setEntries] = useState<RegistryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('osmak-registry-data');
+      return saved ? JSON.parse(saved) : MOCK_DATA;
+    } catch (e) {
+      console.error("Failed to load local storage", e);
+      return MOCK_DATA;
+    }
+  });
+
   const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
+
+  // Save to LocalStorage whenever entries change
+  useEffect(() => {
+    localStorage.setItem('osmak-registry-data', JSON.stringify(entries));
+  }, [entries]);
 
   const handleLogin = (section: string) => {
     setUser(section);
@@ -1542,7 +1781,7 @@ const App = () => {
           view === 'RECENT_ACTIVITY' ? (
              <RecentActivity entries={entries} onItemClick={setSelectedItem} />
           ) : qaSelectedSection ? (
-            // QA Viewing a specific section (Read Only)
+            // QA Viewing a specific section (Read Only with Closed Registries)
             <SectionView 
               sectionName={qaSelectedSection}
               entries={entries.filter(e => e.section === qaSelectedSection)}
