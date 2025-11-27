@@ -174,6 +174,13 @@ const SECTIONS = [
   'Surgical Care Complex'
 ];
 
+// --- MOCK CREDENTIALS STORE ---
+// In a real app, this would be handled by Supabase Auth (Email/Password)
+const CREDENTIALS: Record<string, string> = {
+  'QA (Quality Assurance)': 'admin123',
+  'DEFAULT': 'osmak123' // Fallback for all other sections
+};
+
 const SOURCES = [
   'Internal Audit',
   'Incidents',
@@ -282,6 +289,20 @@ const getDaysRemaining = (item: RegistryItem): { days: number, label: string, co
 const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   const [section, setSection] = useState(SECTIONS[1]); // Default to first non-QA
   const [isAdmin, setIsAdmin] = useState(false);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetSection = isAdmin ? SECTIONS[0] : section;
+    const correctPassword = CREDENTIALS[targetSection] || CREDENTIALS['DEFAULT'];
+
+    if (password === correctPassword) {
+      onLogin(targetSection);
+    } else {
+      setError('Invalid password. Please try again.');
+    }
+  };
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-osmak-50 to-osmak-100 flex items-center justify-center p-4">
@@ -293,10 +314,10 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
           <h1 className="text-2xl font-bold">Ospital ng Makati</h1>
           <p className="text-osmak-200 text-sm mt-2">Risk & Opportunities Registry System</p>
         </div>
-        <form onSubmit={(e) => { e.preventDefault(); onLogin(isAdmin ? SECTIONS[0] : section); }} className="p-8 space-y-6">
+        <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
-            <button type="button" onClick={() => setIsAdmin(false)} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${!isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Section User</button>
-            <button type="button" onClick={() => setIsAdmin(true)} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>QA Admin</button>
+            <button type="button" onClick={() => { setIsAdmin(false); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${!isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Section User</button>
+            <button type="button" onClick={() => { setIsAdmin(true); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>QA Admin</button>
           </div>
 
           {!isAdmin ? (
@@ -322,8 +343,13 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
               type="password" 
               className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 outline-none bg-white text-gray-900"
               placeholder="••••••••"
-              defaultValue="demo123"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
             />
+            {error && <p className="text-red-500 text-xs mt-2 font-medium">{error}</p>}
+            <p className="text-gray-400 text-xs mt-2 italic">
+               Hint: Use <strong>{isAdmin ? 'admin123' : 'osmak123'}</strong>
+            </p>
           </div>
           <button type="submit" className="w-full bg-osmak-700 hover:bg-osmak-800 text-white font-semibold py-3 rounded-lg transition shadow-md">
             Login
