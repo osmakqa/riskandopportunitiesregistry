@@ -1,6 +1,8 @@
 {
   "name": "risks-and-opportunities-app",
   "private": true,
+  // ⬅️ ADD THIS LINE
+  "homepage": "https://osmakqa.github.io/riskandopportunitiesregistry/",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
