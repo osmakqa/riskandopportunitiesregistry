@@ -608,13 +608,34 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
             <button type="submit" className="w-full bg-osmak-green hover:bg-osmak-green-dark text-white font-semibold py-3 rounded-lg transition shadow-md">
               Login
             </button>
-            <button 
-              type="button" 
-              onClick={() => setShowWorkflow(true)}
-              className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2"
-            >
-              <BookOpen size={16} /> View System Workflow
-            </button>
+            
+            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+                <button 
+                  type="button" 
+                  onClick={() => setShowWorkflow(true)}
+                  className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2 py-1"
+                >
+                  <BookOpen size={16} /> View System Workflow
+                </button>
+                
+                <a 
+                  href="https://drive.google.com/file/d/1obDtzRxsTOpUMF0_pjScmyx-njpW_JAB/view?usp=sharing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full text-blue-600 text-sm font-medium hover:underline flex items-center justify-center gap-2 py-1"
+                >
+                   <FileText size={16} /> Download User Manual
+                </a>
+
+                <a 
+                   href="https://drive.google.com/file/d/1m3TXXwC7nV7lp2JNLgB9cxAbXsosaOLA/view?usp=sharing"
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className="w-full text-purple-600 text-sm font-medium hover:underline flex items-center justify-center gap-2 py-1"
+                >
+                   <Eye size={16} /> Watch Orientation
+                </a>
+            </div>
           </div>
         </form>
       </div>

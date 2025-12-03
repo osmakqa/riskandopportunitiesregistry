@@ -1,20 +1,27 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# OsMak Risk & Opportunities Registry
 
-# Run and deploy your AI Studio app
+This is the Digital Risk & Opportunities Registry System for Ospital ng Makati.
 
-This contains everything you need to run your app locally.
+## Getting Started
 
-View your app in AI Studio: https://ai.studio/apps/drive/1d7AZS9lsksM1eKTNXVJpl42nrLHBVgHO
+1.  **Install Dependencies**:
+    ```bash
+    npm install
+    ```
 
-## Run Locally
+2.  **Run Development Server**:
+    ```bash
+    npm run dev
+    ```
 
-**Prerequisites:**  Node.js
+3.  **Build for Production**:
+    ```bash
+    npm run build
+    ```
 
+## Deployment to Vercel
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1.  Push this repository to GitHub.
+2.  Import the project into Vercel.
+3.  Vercel will automatically detect the Vite settings.
+4.  Deploy!
