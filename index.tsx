@@ -9,8 +9,8 @@ import {
   FileText, 
   LogOut, 
   ChevronRight, 
-  ChevronDown,
-  ChevronUp,
+  ChevronDown, 
+  ChevronUp, 
   CheckCircle2, 
   AlertTriangle,
   Activity,
@@ -32,7 +32,17 @@ import {
   RotateCcw,
   Layers,
   MessageSquare,
-  Loader2
+  Loader2,
+  Wifi,
+  WifiOff,
+  Download,
+  BookOpen,
+  ArrowUpDown,
+  Pencil,
+  Save,
+  BarChart3,
+  Filter,
+  X
 } from 'lucide-react';
 
 // --- Supabase Configuration ---
@@ -45,8 +55,15 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type EntryType = 'RISK' | 'OPPORTUNITY';
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-type WorkflowStatus = 'PLAN_REVIEW' | 'IMPLEMENTATION' | 'REASSESSMENT' | 'QA_VERIFICATION' | 'CLOSED';
+// Removed PLAN_REVIEW from WorkflowStatus
+type WorkflowStatus = 'IMPLEMENTATION' | 'REASSESSMENT' | 'QA_VERIFICATION' | 'CLOSED';
 type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
+
+interface AuditEvent {
+  timestamp: string;
+  event: string;
+  user: string;
+}
 
 interface ActionPlan {
   id: string;
@@ -56,12 +73,13 @@ interface ActionPlan {
   responsiblePerson: string;
   targetDate: string;
   status: ActionStatus;
-  completionRemarks?: string; // New field for user completion notes
+  completionRemarks?: string;
 }
 
 interface RegistryItem {
   id: string;
   section: string;
+  dateIdentified: string;
   process: string;
   source: string;
   description: string;
@@ -94,6 +112,13 @@ interface RegistryItem {
   status: WorkflowStatus;
   createdAt: string;
   closedAt?: string;
+  auditTrail: AuditEvent[];
+}
+
+interface DonutChartProps {
+  title: string;
+  data: Record<string, number>;
+  colors: Record<string, string>;
 }
 
 // --- Data Mapping Helpers (CamelCase <-> SnakeCase) ---
@@ -101,6 +126,7 @@ interface RegistryItem {
 const mapToDb = (item: RegistryItem) => ({
   id: item.id,
   section: item.section,
+  date_identified: item.dateIdentified,
   process: item.process,
   source: item.source,
   description: item.description,
@@ -114,6 +140,7 @@ const mapToDb = (item: RegistryItem) => ({
   expected_benefit: item.expectedBenefit,
   feasibility: item.feasibility,
   action_plans: item.actionPlans,
+  // Specific mapping for Residual Risk fields
   residual_likelihood: item.residualLikelihood,
   residual_severity: item.residualSeverity,
   residual_risk_rating: item.residualRiskRating,
@@ -122,15 +149,17 @@ const mapToDb = (item: RegistryItem) => ({
   reassessment_date: item.reassessmentDate,
   status: item.status,
   created_at: item.createdAt,
-  closed_at: item.closedAt
+  closed_at: item.closedAt,
+  audit_trail: item.auditTrail
 });
 
 const mapFromDb = (dbItem: any): RegistryItem => ({
   id: dbItem.id,
   section: dbItem.section,
-  process: dbItem.process,
-  source: dbItem.source,
-  description: dbItem.description,
+  dateIdentified: dbItem.date_identified || '', // Default to empty string to prevent null split error
+  process: dbItem.process || '',
+  source: dbItem.source || '',
+  description: dbItem.description || '',
   type: dbItem.type,
   impactQMS: dbItem.impact_qms,
   likelihood: dbItem.likelihood,
@@ -140,7 +169,7 @@ const mapFromDb = (dbItem: any): RegistryItem => ({
   existingControls: dbItem.existing_controls,
   expectedBenefit: dbItem.expected_benefit,
   feasibility: dbItem.feasibility,
-  actionPlans: dbItem.action_plans || [],
+  actionPlans: (dbItem.action_plans || []) as ActionPlan[],
   residualLikelihood: dbItem.residual_likelihood,
   residualSeverity: dbItem.residual_severity,
   residualRiskRating: dbItem.residual_risk_rating,
@@ -148,13 +177,15 @@ const mapFromDb = (dbItem: any): RegistryItem => ({
   effectivenessRemarks: dbItem.effectiveness_remarks,
   reassessmentDate: dbItem.reassessment_date,
   status: dbItem.status,
-  createdAt: dbItem.created_at,
-  closedAt: dbItem.closed_at
+  createdAt: dbItem.created_at || new Date().toISOString(),
+  closedAt: dbItem.closed_at,
+  auditTrail: dbItem.audit_trail || []
 });
 
 const SECTIONS = [
   'QA (Quality Assurance)',
   'Admitting Section',
+  'Ambulatory Care Medicine Complex',
   'Cardiovascular Diagnostics',
   'Cashier Management',
   'Claims',
@@ -175,10 +206,9 @@ const SECTIONS = [
   'Requisition Section',
   'Supply Management Section',
   'Surgical Care Complex'
-];
+].sort();
 
 // --- MOCK CREDENTIALS STORE ---
-// In a real app, this would be handled by Supabase Auth (Email/Password)
 const CREDENTIALS: Record<string, string> = {
   'QA (Quality Assurance)': 'admin123',
   'DEFAULT': 'osmak123' // Fallback for all other sections
@@ -198,6 +228,58 @@ const SOURCES = [
 ];
 
 // --- Helpers & Dictionaries ---
+
+// Generate Chronological Display IDs (R1, R2... O1, O2...)
+const getDisplayIds = (items: RegistryItem[]) => {
+  const map: Record<string, string> = {};
+  
+  // Sort by createdAt to ensure chronological order
+  const risks = items.filter(i => i.type === 'RISK').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const opps = items.filter(i => i.type === 'OPPORTUNITY').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  
+  risks.forEach((item, index) => {
+    map[item.id] = `R${index + 1}`;
+  });
+  
+  opps.forEach((item, index) => {
+    map[item.id] = `O${index + 1}`;
+  });
+  
+  return map;
+};
+
+// Audit Trail Helper
+const addAuditEvent = (item: RegistryItem, event: string, user: string): RegistryItem => {
+  const newEvent: AuditEvent = {
+    timestamp: new Date().toISOString(),
+    event,
+    user,
+  };
+  return {
+    ...item,
+    auditTrail: [...(item.auditTrail || []), newEvent],
+  };
+};
+
+const getPillColor = (status: WorkflowStatus) => {
+    switch (status) {
+      case 'IMPLEMENTATION': return 'bg-purple-100 text-purple-800';
+      case 'REASSESSMENT': return 'bg-amber-100 text-amber-800';
+      case 'QA_VERIFICATION': return 'bg-teal-100 text-teal-800';
+      case 'CLOSED': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+};
+
+const getLevelPillColor = (level?: RiskLevel) => {
+    switch (level) {
+      case 'CRITICAL': return 'bg-red-100 text-red-800';
+      case 'HIGH': return 'bg-orange-100 text-orange-800';
+      case 'MODERATE': return 'bg-yellow-100 text-yellow-800';
+      case 'LOW': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+};
 
 const RISK_STRATEGIES: Record<string, { desc: string, ex: string }> = {
   'Avoid': { desc: 'Eliminate the hazard or discontinue the activity.', ex: 'Stop using a hazardous chemical.' },
@@ -251,7 +333,6 @@ const getRiskColor = (level?: RiskLevel) => {
 
 const getStatusColor = (status: WorkflowStatus) => {
   switch (status) {
-    case 'PLAN_REVIEW': return 'bg-blue-100 text-blue-800';
     case 'IMPLEMENTATION': return 'bg-purple-100 text-purple-800';
     case 'REASSESSMENT': return 'bg-amber-100 text-amber-800';
     case 'QA_VERIFICATION': return 'bg-indigo-100 text-indigo-800';
@@ -261,8 +342,8 @@ const getStatusColor = (status: WorkflowStatus) => {
 };
 
 const formatStatus = (status: WorkflowStatus) => {
-  if (status === 'QA_VERIFICATION') return 'FOR QA VERIFICATION';
-  if (status === 'REASSESSMENT') return 'FOR REASSESSMENT';
+  if (status === 'QA_VERIFICATION') return 'QA VERIFICATION';
+  if (status === 'REASSESSMENT') return 'REASSESSMENT';
   return status.replace('_', ' ');
 }
 
@@ -289,11 +370,183 @@ const getDaysRemaining = (item: RegistryItem): { days: number, label: string, co
 
 // --- Components ---
 
+// Reusable Header Component matching the "Antimicrobial" style
+const AppHeader = ({ title, subtitle, centered = false, small = false }: { title: string, subtitle: string, centered?: boolean, small?: boolean }) => (
+  <header className={`sticky ${small ? 'h-16 px-4' : 'h-20 px-7'} top-0 z-50 flex items-center gap-3 bg-osmak-green text-white py-3 shadow-header w-full ${centered ? 'justify-center' : ''}`}>
+    <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="OsMak Logo" className={`${small ? 'h-10' : 'h-14'} w-auto object-contain`} />
+    <div className="flex flex-col justify-center">
+      <h1 className={`text-white ${small ? 'text-xs' : 'text-xl'} font-extrabold tracking-wide uppercase leading-tight`}>{title}</h1>
+      <span className={`text-white ${small ? 'text-[0.65rem]' : 'text-sm'} opacity-90 tracking-wider`}>{subtitle}</span>
+    </div>
+  </header>
+);
+
+const SidebarHeader = ({ onClose }: { onClose: () => void }) => (
+    <header className="flex bg-[#009a3e] h-16 px-4 items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+        <img 
+            src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" 
+            alt="Logo" 
+            className="h-10 w-auto object-contain"
+        />
+        <div className="flex flex-col">
+            <h1 className="text-white text-sm font-extrabold tracking-wide uppercase leading-none">OSPITAL NG MAKATI</h1>
+            <span className="text-green-50 text-[0.65rem] font-medium opacity-90 tracking-wider mt-0.5">Risk & Opportunities Registry</span>
+        </div>
+        </div>
+        <button onClick={onClose} className="md:hidden text-white p-1 hover:bg-green-700 rounded-full transition-colors">
+            <X size={24} />
+        </button>
+    </header>
+);
+
+const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+    <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
+      {/* Header */}
+      <div className="p-5 bg-osmak-green text-white flex justify-between items-center border-b border-osmak-800">
+        <h2 className="text-xl font-bold flex items-center gap-3">
+          <BookOpen size={24} className="text-white" /> 
+          Registry System Workflow
+        </h2>
+        <button onClick={onClose} className="hover:text-osmak-200 transition"><XCircle size={24}/></button>
+      </div>
+      
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto bg-gray-50 p-6 md:p-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          
+          {/* Step 1: Submission */}
+          <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
+            <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-yellow-400 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">1</div>
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="text-yellow-600" size={20} />
+              <h3 className="font-bold text-gray-900 text-lg">Submission</h3>
+            </div>
+            <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
+              <strong>Section User</strong> logs a new Risk or Opportunity. System calculates <strong>Risk Level</strong>. Action Plans are mandatory for <strong>ALL</strong> Risks.
+            </p>
+            <div className="mt-auto">
+              <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded">Status: IMPLEMENTATION</span>
+            </div>
+          </div>
+
+          {/* Step 2: Implementation (Merged Plan Review) */}
+          <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
+            <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-indigo-500 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">2</div>
+            <div className="flex items-center gap-2 mb-3">
+              <Activity className="text-indigo-600" size={20} />
+              <h3 className="font-bold text-gray-900 text-lg">Implementation</h3>
+            </div>
+            <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
+              <strong>Section User</strong> executes plans immediately. For Risks, click <strong>"Reassess"</strong> to input Residual Risk values. For Opportunities, mark as Completed.
+            </p>
+            <div className="mt-auto">
+              <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded">Status: FOR VERIFICATION</span>
+            </div>
+          </div>
+
+          {/* Step 3: Reassessment */}
+          <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
+            <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-teal-500 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">3</div>
+            <div className="flex items-center gap-2 mb-3">
+              <RotateCcw className="text-teal-600" size={20} />
+              <h3 className="font-bold text-gray-900 text-lg">Reassessment</h3>
+            </div>
+            <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
+              System saves the <strong>Residual Risk</strong> data. QA verifies the action implementation and the reassessed values.
+            </p>
+            <div className="mt-auto">
+              <span className="bg-teal-100 text-teal-800 text-xs font-bold px-3 py-1 rounded">Status: QA VERIFICATION</span>
+            </div>
+          </div>
+
+          {/* Step 4: Closure */}
+          <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8 border-green-200 bg-green-50/50">
+            <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-green-600 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">4</div>
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="text-green-700" size={20} />
+              <h3 className="font-bold text-gray-900 text-lg">Validation & Closure</h3>
+            </div>
+            <p className="text-gray-700 text-sm leading-relaxed mb-4 flex-1">
+              <strong>QA</strong> performs final review of Residual Risk or Opportunity outcome and adds closing remarks.
+            </p>
+            <div className="mt-auto">
+              <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded">Status: CLOSED</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="p-4 bg-gray-100 text-center border-t border-gray-200">
+         <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">
+            Ospital ng Makati Quality Management System • ISO 9001:2015 Compliant
+         </p>
+      </div>
+    </div>
+  </div>
+);
+
+const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[], onClose: () => void, itemId: string }) => {
+    const getIcon = (event: string) => {
+        if (event.includes('Created')) return <PlusCircle size={16} className="text-blue-500" />;
+        if (event.includes('Closed') || event.includes('Verified')) return <CheckCircle2 size={16} className="text-green-500" />;
+        if (event.includes('Edited')) return <Pencil size={16} className="text-yellow-500" />;
+        if (event.includes('Reopened')) return <RotateCcw size={16} className="text-orange-500" />;
+        return <Activity size={16} className="text-gray-500" />;
+    };
+
+    const formatTimestamp = (ts: string) => {
+        return new Date(ts).toLocaleString('en-US', { 
+            year: 'numeric', 
+            month: 'numeric', 
+            day: 'numeric', 
+            hour: 'numeric', 
+            minute: '2-digit', 
+            hour12: true 
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
+                <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+                    <h2 className="text-lg font-bold text-gray-800">Audit Trail for: <span className="font-mono text-osmak-green">{itemId}</span></h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><XCircle size={24}/></button>
+                </div>
+                <div className="flex-1 p-8 overflow-y-auto">
+                    <div className="relative pl-8">
+                        <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-gray-200"></div>
+                        <div className="space-y-8">
+                            {[...trail].reverse().map((event, index) => (
+                                <div key={index} className="relative">
+                                    <div className="absolute -left-8 top-1 w-8 h-8 rounded-full bg-white border-2 border-gray-200 flex items-center justify-center">
+                                        {getIcon(event.event)}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-gray-800">{event.event}</h3>
+                                        <p className="text-sm text-gray-500">
+                                            by <span className="font-medium text-gray-700">{event.user}</span> on {formatTimestamp(event.timestamp)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   const [section, setSection] = useState(SECTIONS[1]); // Default to first non-QA
   const [isAdmin, setIsAdmin] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [showWorkflow, setShowWorkflow] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -308,19 +561,16 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   };
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-osmak-50 to-osmak-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#F0FFF4] flex items-center justify-center p-4">
+      {showWorkflow && <WorkflowModal onClose={() => setShowWorkflow(false)} />}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-osmak-900 p-8 text-white text-center">
-          <div className="flex justify-center mb-4">
-            <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="OsMak Logo" className="h-20 w-auto" />
-          </div>
-          <h1 className="text-2xl font-bold">Ospital ng Makati</h1>
-          <p className="text-osmak-200 text-sm mt-2">Risk & Opportunities Registry System</p>
-        </div>
+        {/* Updated Header Style - Left Aligned per request */}
+        <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" />
+        
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
             <button type="button" onClick={() => { setIsAdmin(false); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${!isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Section User</button>
-            <button type="button" onClick={() => { setIsAdmin(true); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>QA Admin</button>
+            <button type="button" onClick={() => { setIsAdmin(true); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Quality Assurance</button>
           </div>
 
           {!isAdmin ? (
@@ -336,7 +586,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
             </div>
           ) : (
             <div className="p-4 bg-indigo-50 text-indigo-800 text-sm rounded-lg border border-indigo-100">
-              Logging in as <strong>QA Command Center</strong>.
+              Logging in as <strong>Quality Assurance Auditor</strong>.
             </div>
           )}
 
@@ -354,16 +604,41 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
                Hint: Use <strong>{isAdmin ? 'admin123' : 'osmak123'}</strong>
             </p>
           </div>
-          <button type="submit" className="w-full bg-osmak-700 hover:bg-osmak-800 text-white font-semibold py-3 rounded-lg transition shadow-md">
-            Login
-          </button>
+          <div className="space-y-4">
+            <button type="submit" className="w-full bg-osmak-green hover:bg-osmak-green-dark text-white font-semibold py-3 rounded-lg transition shadow-md">
+              Login
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setShowWorkflow(true)}
+              className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2"
+            >
+              <BookOpen size={16} /> View System Workflow
+            </button>
+          </div>
         </form>
       </div>
     </div>
   );
 };
 
-const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem, isQA: boolean, onClose: () => void, onUpdate: (updated: RegistryItem) => void }) => {
+const ItemDetailModal = ({ 
+  item, 
+  isQA, 
+  currentUser,
+  displayId,
+  onClose, 
+  onUpdate, 
+  onDelete 
+}: { 
+  item: RegistryItem, 
+  isQA: boolean, 
+  currentUser: string,
+  displayId: string,
+  onClose: () => void, 
+  onUpdate: (updated: RegistryItem) => void,
+  onDelete: (id: string) => void
+}) => {
   const [reassessment, setReassessment] = useState({
     likelihood: 1,
     severity: 1,
@@ -371,31 +646,43 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
     date: new Date().toISOString().split('T')[0]
   });
 
-  // State for adding/editing action plans inside modal (for revisions)
+  // Editing State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<RegistryItem>(item);
+
   const [isAddingPlan, setIsAddingPlan] = useState(false);
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
-
-  // State for user marking action plan as completed (adding remarks)
   const [completingActionId, setCompletingActionId] = useState<string | null>(null);
   const [completionRemarks, setCompletionRemarks] = useState('');
 
-  // Computed Risk Level for Reassessment Form
+  // Delete Confirmation State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
+  // Reopen Confirmation State
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
+  const [reopenPassword, setReopenPassword] = useState('');
+  const [reopenError, setReopenError] = useState('');
+
   const reassessmentRiskRating = reassessment.likelihood * reassessment.severity;
   const reassessmentRiskLevel = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
+
+  // Sync editData when modal opens/item changes
+  useEffect(() => {
+    setEditData(item);
+  }, [item]);
 
   const handleActionStatusChange = (actionId: string, newStatus: ActionStatus, remarks?: string) => {
     const updatedActions = item.actionPlans.map(ap => 
       ap.id === actionId ? { ...ap, status: newStatus, completionRemarks: remarks || ap.completionRemarks } : ap
-    );
+    ) as ActionPlan[];
     
     let nextStatus = item.status;
+    let eventLog = '';
     
-    if (isQA && item.status === 'PLAN_REVIEW') {
-      const allApproved = updatedActions.every(a => a.status === 'APPROVED' || a.status === 'COMPLETED');
-      if (allApproved) nextStatus = 'IMPLEMENTATION';
-    }
-
     if (isQA && item.status === 'IMPLEMENTATION') {
+      eventLog = 'Action Plan Verified as Complete';
       const allCompleted = updatedActions.every(a => a.status === 'COMPLETED');
       if (allCompleted) {
          if (item.type === 'RISK') {
@@ -405,41 +692,102 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
          }
       }
     }
+    
+    let updatedItem = addAuditEvent(item, eventLog, currentUser);
+    updatedItem = {...updatedItem, actionPlans: updatedActions, status: nextStatus };
 
-    onUpdate({ ...item, actionPlans: updatedActions, status: nextStatus });
+    onUpdate(updatedItem);
     setCompletingActionId(null);
     setCompletionRemarks('');
   };
 
   const handleUserMarkCompleted = (actionId: string) => {
-    handleActionStatusChange(actionId, 'FOR_VERIFICATION', completionRemarks);
+    let updatedItem = addAuditEvent(item, "Action Submitted for Verification", currentUser);
+    
+    // Prepare updates
+    let updates: Partial<RegistryItem> = {};
+
+    if (item.type === 'RISK') {
+        const rating = reassessment.likelihood * reassessment.severity;
+        const level = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
+        updates = {
+             residualLikelihood: reassessment.likelihood,
+             residualSeverity: reassessment.severity,
+             residualRiskRating: rating,
+             residualRiskLevel: level,
+        };
+    }
+
+    const updatedActions = item.actionPlans.map(ap => 
+      ap.id === actionId ? { ...ap, status: 'FOR_VERIFICATION', completionRemarks } : ap
+    ) as ActionPlan[];
+
+    onUpdate({ ...updatedItem, actionPlans: updatedActions, ...updates });
+    setCompletingActionId(null);
+    setCompletionRemarks('');
   };
 
   const handleSubmitReassessment = () => {
+    let updatedItem = addAuditEvent(item, "Residual Risk Reassessment Submitted", currentUser);
+    
+    // Auto-compute residual values
+    const rating = reassessment.likelihood * reassessment.severity;
+    const level = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
+
     onUpdate({
-      ...item,
+      ...updatedItem,
       residualLikelihood: reassessment.likelihood,
       residualSeverity: reassessment.severity,
-      residualRiskRating: reassessmentRiskRating,
-      residualRiskLevel: reassessmentRiskLevel,
+      residualRiskRating: rating,
+      residualRiskLevel: level,
       effectivenessRemarks: reassessment.remarks,
       reassessmentDate: reassessment.date,
       status: 'QA_VERIFICATION'
     });
   };
 
+
   const handleFinalClose = () => {
     const finalRemarks = reassessment.remarks || item.effectivenessRemarks;
+    let updatedItem = addAuditEvent(item, "Entry Validated and Closed", currentUser);
     onUpdate({ 
-      ...item, 
+      ...updatedItem, 
       status: 'CLOSED',
       effectivenessRemarks: finalRemarks,
       closedAt: new Date().toISOString().split('T')[0]
     });
   };
+  
+  const handleRequirePlan = () => {
+     alert("Please notify the section that an action plan is mandatory.");
+  }
 
   const handleRejectReassessment = () => {
-    onUpdate({ ...item, status: 'REASSESSMENT' });
+    let updatedItem = addAuditEvent(item, "Reassessment Rejected", currentUser);
+    onUpdate({ ...updatedItem, status: 'REASSESSMENT' });
+  };
+  
+  const handleReopen = () => {
+      const updatedItem = addAuditEvent(item, "Entry Reopened", currentUser);
+      onUpdate({ ...updatedItem, status: 'IMPLEMENTATION', closedAt: undefined });
+  };
+
+  const confirmDelete = () => {
+      const correctPassword = CREDENTIALS[currentUser] || CREDENTIALS['DEFAULT'];
+      if (deletePassword === correctPassword) {
+          onDelete(item.id);
+      } else {
+          setDeleteError('Incorrect password. Please try again.');
+      }
+  };
+
+  const confirmReopen = () => {
+      const correctPassword = CREDENTIALS[currentUser] || CREDENTIALS['DEFAULT'];
+      if (reopenPassword === correctPassword) {
+          handleReopen();
+      } else {
+          setReopenError('Incorrect password. Please try again.');
+      }
   };
 
   const handleAddPlanInModal = () => {
@@ -447,33 +795,54 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
     const action: ActionPlan = {
       id: `AP-${Date.now()}`,
       ...newPlan,
-      status: 'PENDING_APPROVAL'
+      status: 'APPROVED' // Auto-approved as Plan Review is skipped
     };
+    const updatedItem = addAuditEvent(item, `Action Plan Added: ${newPlan.description}`, currentUser);
     onUpdate({
-      ...item,
-      actionPlans: [...item.actionPlans, action]
+      ...updatedItem,
+      actionPlans: [...updatedItem.actionPlans, action]
     });
     setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
     setIsAddingPlan(false);
   };
 
   const handleDeletePlan = (id: string) => {
+    const planToDelete = item.actionPlans.find(ap => ap.id === id);
+    let updatedItem = addAuditEvent(item, `Action Plan Removed: ${planToDelete?.description}`, currentUser);
     onUpdate({
-      ...item,
-      actionPlans: item.actionPlans.filter(ap => ap.id !== id)
+      ...updatedItem,
+      actionPlans: updatedItem.actionPlans.filter(ap => ap.id !== id)
     });
   };
 
+  // --- Edit Logic ---
+  const updateEditRisk = (l: number, s: number) => {
+    setEditData(prev => ({
+      ...prev,
+      likelihood: l,
+      severity: s,
+      riskRating: l * s,
+      riskLevel: calculateRiskLevel(l, s)
+    }));
+  };
+
+  const handleSaveEdit = () => {
+    const updatedItem = addAuditEvent(editData, "Details Edited", currentUser);
+    onUpdate(updatedItem);
+    setIsEditing(false);
+  };
+
   const strategies = item.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
+  // Allow edit in IMPLEMENTATION since PLAN_REVIEW is removed
+  const canEdit = !isQA && item.status === 'IMPLEMENTATION';
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
         <div className="p-6 border-b bg-gray-50 flex justify-between items-start">
           <div className="flex-1 mr-4">
             <div className="flex items-center gap-3 mb-2">
-              <span className="font-mono text-xs text-gray-500 bg-white border px-2 py-0.5 rounded">{item.id}</span>
+              <span className="font-mono text-xs text-gray-500 bg-white border px-2 py-0.5 rounded">{displayId}</span>
               <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(item.status)}`}>
                 {formatStatus(item.status)}
               </span>
@@ -481,30 +850,95 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                 {item.type}
               </span>
             </div>
-            <h2 className="text-xl font-bold text-gray-900">{item.description}</h2>
+            {isEditing ? (
+              <input 
+                type="text" 
+                className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-transparent"
+                value={editData.description}
+                onChange={e => setEditData({...editData, description: e.target.value})}
+              />
+            ) : (
+              <h2 className="text-xl font-bold text-gray-900">{item.description}</h2>
+            )}
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><XCircle size={28}/></button>
+          <div className="flex gap-2">
+            {canEdit && !isEditing && (
+              <button 
+                onClick={() => setIsEditing(true)} 
+                className="text-gray-500 hover:text-osmak-700 p-1 rounded hover:bg-gray-100 transition"
+                title="Edit Details"
+              >
+                <Pencil size={24}/>
+              </button>
+            )}
+            {isEditing && (
+              <button 
+                onClick={handleSaveEdit} 
+                className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50 transition"
+                title="Save Changes"
+              >
+                <Save size={24}/>
+              </button>
+            )}
+            <button onClick={() => { setIsEditing(false); onClose(); }} className="text-gray-400 hover:text-gray-600"><XCircle size={28}/></button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-white">
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-white relative">
           
-          {/* Section 1: Core Metadata */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm p-4 bg-gray-50 rounded-xl border border-gray-100">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm p-4 bg-gray-50 rounded-xl border border-gray-100">
              <div>
                 <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Section</span>
                 <span className="font-semibold text-gray-800">{item.section}</span>
              </div>
              <div>
                 <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Process / Function</span>
-                <span className="font-semibold text-gray-800">{item.process}</span>
+                {isEditing ? (
+                   <input type="text" className="w-full border rounded p-1 bg-white" value={editData.process} onChange={e => setEditData({...editData, process: e.target.value})} />
+                ) : (
+                   <span className="font-semibold text-gray-800">{item.process}</span>
+                )}
              </div>
              <div>
                 <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Source</span>
-                <span className="font-semibold text-gray-800">{item.source}</span>
+                {isEditing ? (
+                   <div className="relative">
+                      <select 
+                          className="w-full border rounded p-1 bg-white appearance-none"
+                          value={SOURCES.includes(editData.source) ? editData.source : 'Others'}
+                          onChange={e => {
+                              if (e.target.value === 'Others') setEditData({...editData, source: ''});
+                              else setEditData({...editData, source: e.target.value});
+                          }}
+                      >
+                          {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      {(!SOURCES.includes(editData.source) || editData.source === '') && (
+                          <input 
+                              type="text" 
+                              className="w-full border rounded p-1 mt-1 bg-white" 
+                              placeholder="Specify source..."
+                              value={editData.source}
+                              onChange={e => setEditData({...editData, source: e.target.value})}
+                          />
+                      )}
+                   </div>
+                ) : (
+                   <span className="font-semibold text-gray-800">{item.source}</span>
+                )}
+             </div>
+             <div>
+                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Date Identified</span>
+                {isEditing ? (
+                   <input type="date" className="w-full border rounded p-1 bg-white" value={editData.dateIdentified} onChange={e => setEditData({...editData, dateIdentified: e.target.value})} />
+                ) : (
+                   <span className="font-semibold text-gray-800 flex items-center gap-2">
+                      <Calendar size={14} className="text-gray-400"/> {item.dateIdentified || 'N/A'}
+                   </span>
+                )}
              </div>
           </div>
 
-          {/* Section 2: Assessment Details (Full Data) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <div className="space-y-4">
                <h3 className="font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
@@ -515,22 +949,42 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                  <>
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Potential Impact on QMS</span>
-                     <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm">{item.impactQMS}</p>
+                     {isEditing ? (
+                        <textarea className="w-full border rounded p-2 bg-white" value={editData.impactQMS} onChange={e => setEditData({...editData, impactQMS: e.target.value})} />
+                     ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.impactQMS}</p>
+                     )}
                    </div>
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Existing Controls / Mitigation</span>
-                     <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm">{item.existingControls || 'N/A'}</p>
+                     {isEditing ? (
+                        <textarea className="w-full border rounded p-2 bg-white" value={editData.existingControls} onChange={e => setEditData({...editData, existingControls: e.target.value})} />
+                     ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.existingControls || 'N/A'}</p>
+                     )}
                    </div>
                  </>
                ) : (
                  <>
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Expected Benefit</span>
-                     <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm">{item.expectedBenefit}</p>
+                     {isEditing ? (
+                        <textarea className="w-full border rounded p-2 bg-white" value={editData.expectedBenefit} onChange={e => setEditData({...editData, expectedBenefit: e.target.value})} />
+                     ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.expectedBenefit}</p>
+                     )}
                    </div>
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Feasibility</span>
-                     <span className="text-green-700 font-bold">{item.feasibility}</span>
+                     {isEditing ? (
+                        <select className="w-full border rounded p-2 bg-white" value={editData.feasibility} onChange={e => setEditData({...editData, feasibility: e.target.value as any})}>
+                            <option value="LOW">Low</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HIGH">High</option>
+                        </select>
+                     ) : (
+                        <span className="text-green-700 font-bold">{item.feasibility}</span>
+                     )}
                    </div>
                  </>
                )}
@@ -542,39 +996,59 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                 </h3>
                 {item.type === 'RISK' ? (
                   <div className="flex gap-4">
-                     <div className="flex-1 bg-gray-50 p-4 rounded-lg text-center">
+                     <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
                         <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
-                        <div className="text-2xl font-bold text-gray-900">{item.likelihood}</div>
-                        <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[item.likelihood || 1]}</div>
+                        {isEditing ? (
+                           <>
+                             <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.likelihood} onChange={e => updateEditRisk(parseInt(e.target.value), editData.severity || 1)} />
+                             <div className="text-xl font-bold text-osmak-800 mt-1">{editData.likelihood}</div>
+                           </>
+                        ) : (
+                           <div className="text-2xl font-bold text-gray-900">{item.likelihood}</div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[(isEditing ? editData.likelihood : item.likelihood) || 1]}</div>
                      </div>
-                     <div className="flex-1 bg-gray-50 p-4 rounded-lg text-center">
+                     
+                     <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
                         <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
-                        <div className="text-2xl font-bold text-gray-900">{item.severity}</div>
-                        <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[item.severity || 1]}</div>
+                        {isEditing ? (
+                           <>
+                             <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.severity} onChange={e => updateEditRisk(editData.likelihood || 1, parseInt(e.target.value))} />
+                             <div className="text-xl font-bold text-osmak-800 mt-1">{editData.severity}</div>
+                           </>
+                        ) : (
+                           <div className="text-2xl font-bold text-gray-900">{item.severity}</div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[(isEditing ? editData.severity : item.severity) || 1]}</div>
                      </div>
+
                      <div className="flex-1 p-4 rounded-lg text-center border-2 border-gray-100 flex flex-col justify-center items-center">
                         <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Risk Rating</span>
-                        <div className={`text-3xl font-bold ${item.riskLevel === 'CRITICAL' ? 'text-red-600' : item.riskLevel === 'HIGH' ? 'text-orange-500' : 'text-gray-800'}`}>
-                          {item.riskRating}
+                        <div className={`text-3xl font-bold ${
+                           (isEditing ? editData.riskLevel : item.riskLevel) === 'CRITICAL' ? 'text-red-600' : 
+                           (isEditing ? editData.riskLevel : item.riskLevel) === 'HIGH' ? 'text-orange-500' : 'text-gray-800'
+                        }`}>
+                          {isEditing ? editData.riskRating : item.riskRating}
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(item.riskLevel)}`}>{item.riskLevel}</span>
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(isEditing ? editData.riskLevel : item.riskLevel)}`}>
+                            {isEditing ? editData.riskLevel : item.riskLevel}
+                        </span>
                      </div>
                   </div>
                 ) : (
                   <div className="bg-green-50 p-4 rounded-lg text-green-800 text-sm">
-                    Opportunities are prioritized based on Feasibility ({item.feasibility}) and Impact.
+                    Opportunities are prioritized based on Feasibility ({isEditing ? editData.feasibility : item.feasibility}) and Impact.
                   </div>
                 )}
              </div>
           </div>
 
-          {/* Section 3: Action Plans */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                 <ClipboardCheck size={20} /> Action Plans
               </h3>
-              {(!isQA && item.status === 'PLAN_REVIEW' && !isAddingPlan) && (
+              {(!isQA && item.status === 'IMPLEMENTATION' && !isAddingPlan) && (
                 <button onClick={() => setIsAddingPlan(true)} className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-100 border border-blue-200">
                   + Add / Revise Plan
                 </button>
@@ -624,13 +1098,6 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                         <td className="px-4 py-3 text-right align-top pt-4">
                           {isQA ? (
                             <div className="flex flex-col gap-2 items-end">
-                              {item.status === 'PLAN_REVIEW' && ap.status === 'PENDING_APPROVAL' && (
-                                <>
-                                  <button onClick={() => handleActionStatusChange(ap.id, 'APPROVED')} className="text-blue-600 hover:text-blue-800 text-xs font-bold border border-blue-200 px-2 py-1 rounded">Approve</button>
-                                  <button onClick={() => handleActionStatusChange(ap.id, 'REVISION_REQUIRED')} className="text-red-600 hover:text-red-800 text-xs font-bold border border-red-200 px-2 py-1 rounded">Revise</button>
-                                </>
-                              )}
-                              {/* QA Verifies User's Implementation */}
                               {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_VERIFICATION' && (
                                 <button onClick={() => handleActionStatusChange(ap.id, 'COMPLETED')} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700 shadow-sm flex items-center gap-1">
                                   <CheckCircle2 size={12} /> Verify Completion
@@ -641,50 +1108,105 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                               )}
                             </div>
                           ) : (
-                            // User Controls
                             <>
-                              {item.status === 'PLAN_REVIEW' && (
+                              {item.status === 'IMPLEMENTATION' && (
                                 <button onClick={() => handleDeletePlan(ap.id)} className="text-red-500 hover:text-red-700 p-1">
                                   <Trash2 size={16} />
                                 </button>
                               )}
                               {item.status === 'IMPLEMENTATION' && (ap.status === 'APPROVED' || ap.status === 'REVISION_REQUIRED') && !completingActionId && (
-                                <button onClick={() => setCompletingActionId(ap.id)} className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm">
-                                  Mark Implemented
+                                <button 
+                                    onClick={() => {
+                                        setCompletingActionId(ap.id);
+                                        // Initialize reassessment values for the expansion row
+                                        if (item.type === 'RISK') {
+                                            setReassessment(prev => ({
+                                                ...prev,
+                                                likelihood: item.residualLikelihood || item.likelihood || 1,
+                                                severity: item.residualSeverity || item.severity || 1
+                                            }));
+                                        }
+                                    }} 
+                                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm"
+                                >
+                                  {item.type === 'RISK' ? 'Reassess' : 'Mark Completed'}
                                 </button>
                               )}
                             </>
                           )}
                         </td>
                       </tr>
-                      {/* User Remark Input Form */}
                       {completingActionId === ap.id && (
                         <tr>
                           <td colSpan={7} className="px-4 py-4 bg-green-50">
-                            <div className="flex gap-4 items-end">
-                              <div className="flex-1">
-                                <label className="block text-xs font-bold text-green-800 mb-1">Completion Remarks (Required)</label>
-                                <input 
-                                  type="text" 
-                                  className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
-                                  placeholder="e.g. Installed software on May 20, 2024. Evidence attached."
-                                  value={completionRemarks}
-                                  onChange={e => setCompletionRemarks(e.target.value)}
-                                />
-                              </div>
-                              <button 
-                                onClick={() => handleUserMarkCompleted(ap.id)}
-                                disabled={!completionRemarks}
-                                className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50"
-                              >
-                                Submit for Verification
-                              </button>
-                              <button 
-                                onClick={() => { setCompletingActionId(null); setCompletionRemarks(''); }}
-                                className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300"
-                              >
-                                Cancel
-                              </button>
+                            <div className="flex flex-col gap-4">
+                                {item.type === 'RISK' && (
+                                    <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
+                                        <h4 className="font-bold text-green-800 text-sm mb-3 border-b pb-2 flex items-center gap-2">
+                                            <Activity size={16}/> Proposed Residual Risk Assessment
+                                        </h4>
+                                        <div className="flex items-center gap-6">
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Likelihood (1-5)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="range" min="1" max="5" 
+                                                        value={reassessment.likelihood}
+                                                        onChange={e => setReassessment({...reassessment, likelihood: parseInt(e.target.value)})}
+                                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                                                    />
+                                                    <span className="font-bold text-gray-800 w-6 text-center">{reassessment.likelihood}</span>
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 mt-1">{LIKELIHOOD_DESC[reassessment.likelihood]}</div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Severity (1-5)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="range" min="1" max="5" 
+                                                        value={reassessment.severity}
+                                                        onChange={e => setReassessment({...reassessment, severity: parseInt(e.target.value)})}
+                                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                                                    />
+                                                    <span className="font-bold text-gray-800 w-6 text-center">{reassessment.severity}</span>
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 mt-1">{SEVERITY_DESC[reassessment.severity]}</div>
+                                            </div>
+                                            <div className="text-center px-6 border-l flex flex-col items-center">
+                                                <div className="text-xs font-bold text-gray-400 uppercase mb-1">Residual Rating</div>
+                                                <div className="text-2xl font-bold text-gray-800">{reassessment.likelihood * reassessment.severity}</div>
+                                                <div className={`text-xs font-bold px-2 py-0.5 rounded mt-1 ${getLevelPillColor(calculateRiskLevel(reassessment.likelihood, reassessment.severity))}`}>
+                                                    {calculateRiskLevel(reassessment.likelihood, reassessment.severity)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="flex gap-4 items-end">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-green-800 mb-1">Completion Remarks (Optional)</label>
+                                    <input 
+                                    type="text" 
+                                    className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
+                                    placeholder="e.g. Installed software on May 20, 2024. Evidence attached."
+                                    value={completionRemarks}
+                                    onChange={e => setCompletionRemarks(e.target.value)}
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => handleUserMarkCompleted(ap.id)}
+                                    className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50"
+                                >
+                                    Submit for Verification
+                                </button>
+                                <button 
+                                    onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); }}
+                                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300"
+                                >
+                                    Cancel
+                                </button>
+                                </div>
                             </div>
                           </td>
                         </tr>
@@ -695,7 +1217,18 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
               </table>
             </div>
 
-            {/* Add Action Plan Form inside Modal */}
+            {isQA && item.status === 'IMPLEMENTATION' && item.type === 'RISK' && item.actionPlans.length === 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4 flex items-center justify-between">
+                    <div>
+                        <h4 className="font-bold text-red-900">Missing Action Plan</h4>
+                        <p className="text-sm text-red-800">Action plans are mandatory for all risks. Please require the section to add one.</p>
+                    </div>
+                    <div className="flex gap-2">
+                         <button onClick={handleRequirePlan} className="px-4 py-2 bg-white border border-red-300 text-red-800 rounded font-bold hover:bg-red-100 text-sm">Require Action Plan</button>
+                    </div>
+                </div>
+            )}
+
             {isAddingPlan && (
               <div className="mt-4 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-fadeIn">
                  <h4 className="text-sm font-bold text-blue-800 mb-3">New Action Plan Details</h4>
@@ -718,1161 +1251,904 @@ const ItemDetailModal = ({ item, isQA, onClose, onUpdate }: { item: RegistryItem
                    />
                    <input 
                      type="text" 
-                     placeholder="Verification / Evidence (e.g. Photo log, Certificate)"
+                     placeholder="Verification / Evidence (e.g. Photo, Logbook)"
                      className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                      value={newPlan.evidence}
                      onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
                    />
-                   <div className="grid grid-cols-2 gap-3">
+                   <div className="flex gap-4">
                      <input 
                        type="text" 
                        placeholder="Responsible Person"
-                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.responsiblePerson}
                        onChange={e => setNewPlan({...newPlan, responsiblePerson: e.target.value})}
                      />
                      <input 
                        type="date" 
-                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.targetDate}
                        onChange={e => setNewPlan({...newPlan, targetDate: e.target.value})}
                      />
                    </div>
-                   <div className="flex gap-2">
-                    <button 
-                      onClick={handleAddPlanInModal}
-                      className="flex-1 bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700"
-                    >
-                      Add Plan
-                    </button>
-                    <button 
-                      onClick={() => setIsAddingPlan(false)}
-                      className="px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300"
-                    >
-                      Cancel
-                    </button>
+                   <div className="flex justify-end gap-2">
+                     <button 
+                       onClick={() => setIsAddingPlan(false)} 
+                       className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300"
+                     >
+                       Cancel
+                     </button>
+                     <button 
+                       onClick={handleAddPlanInModal} 
+                       className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
+                       disabled={!newPlan.description || !newPlan.strategy}
+                     >
+                       Save Plan
+                     </button>
                    </div>
                  </div>
               </div>
             )}
           </div>
 
-          {/* Section 4: Workflow Actions */}
-          <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-            <h3 className="text-sm font-bold uppercase text-slate-500 mb-4 tracking-wide">Workflow Status: {formatStatus(item.status)}</h3>
-            
-            {item.status === 'PLAN_REVIEW' && (
-              <p className="text-slate-700 flex items-center gap-2">
-                <Clock size={18} /> 
-                {item.actionPlans.some(ap => ap.status === 'REVISION_REQUIRED') 
-                  ? <span className="text-red-600 font-bold">Action Plans require revision. Please update above.</span> 
-                  : "Waiting for QA to review action plans."}
-              </p>
-            )}
-
-            {item.status === 'IMPLEMENTATION' && (
-              <p className="text-slate-700 flex items-center gap-2">
-                <Activity size={18} /> 
-                {item.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION') 
-                   ? "Pending QA Verification of implemented actions." 
-                   : "Actions are being implemented. Mark as implemented when done."}
-              </p>
-            )}
-
-            {item.status === 'REASSESSMENT' && item.type === 'RISK' && !isQA && (
-              <div className="space-y-6 animate-fadeIn">
-                <p className="text-amber-700 font-medium">All actions verified by QA. Please perform reassessment.</p>
-                
-                {/* Reassessment Sliders & Matrix */}
-                <div className="grid grid-cols-2 gap-8 pt-2">
-                   <div className="bg-white p-6 rounded-xl border border-gray-200">
-                      <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={18}/> Residual Risk Scoring</h4>
-                      <div className="mb-6">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Likelihood (1-5)</label>
-                        <input 
-                          type="range" min="1" max="5" 
-                          value={reassessment.likelihood} 
-                          onChange={(e) => setReassessment({...reassessment, likelihood: parseInt(e.target.value)})}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-                        />
-                        <div className="text-xs text-gray-400 mt-2 font-medium">{LIKELIHOOD_DESC[reassessment.likelihood]}</div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Severity (1-5)</label>
-                        <input 
-                          type="range" min="1" max="5" 
-                          value={reassessment.severity} 
-                          onChange={(e) => setReassessment({...reassessment, severity: parseInt(e.target.value)})}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-600"
-                        />
-                         <div className="text-xs text-gray-400 mt-2 font-medium">{SEVERITY_DESC[reassessment.severity]}</div>
-                      </div>
-                   </div>
-
-                   <div className="flex flex-col gap-4">
-                      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-                        <span className="text-gray-500 text-sm font-medium mb-2">Residual Risk Level</span>
-                        <div className={`text-6xl font-bold mb-2 ${
-                          reassessmentRiskLevel === 'CRITICAL' ? 'text-red-600' :
-                          reassessmentRiskLevel === 'HIGH' ? 'text-orange-500' :
-                          reassessmentRiskLevel === 'MODERATE' ? 'text-yellow-500' : 'text-green-500'
-                        }`}>
-                          {reassessmentRiskRating}
+          {/* QA Verification & Closure Section */}
+          {(item.status === 'REASSESSMENT' || item.status === 'QA_VERIFICATION' || item.status === 'CLOSED') && (
+            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
+              <h3 className="font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
+                 <ShieldAlert size={18} /> QA Verification & Closure
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="space-y-4">
+                    <div>
+                        <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Residual Risk Rating (User Proposed)</span>
+                        <div className="flex items-center gap-4">
+                            <div className="text-2xl font-bold text-gray-800">{item.residualRiskRating || 'N/A'}</div>
+                            {item.residualRiskLevel && (
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${getRiskColor(item.residualRiskLevel)}`}>
+                                    {item.residualRiskLevel}
+                                </span>
+                            )}
                         </div>
-                        <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider ${getRiskColor(reassessmentRiskLevel)}`}>
-                          {reassessmentRiskLevel}
-                        </span>
-                      </div>
-                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Remarks on Effectiveness</label>
-                  <textarea className="w-full border rounded p-2 h-20 bg-white text-gray-900 border-gray-300" placeholder="Why was the action effective? Describe residual risk."
-                    value={reassessment.remarks} onChange={e => setReassessment({...reassessment, remarks: e.target.value})} />
-                </div>
-                <button onClick={handleSubmitReassessment} className="w-full bg-amber-600 text-white py-2 rounded font-bold hover:bg-amber-700">
-                  Submit Reassessment
-                </button>
-              </div>
-            )}
-
-            {item.status === 'QA_VERIFICATION' && !isQA && item.type === 'OPPORTUNITY' && (
-               <p className="text-slate-700 flex items-center gap-2"><Clock size={18} /> Actions Verified. Waiting for QA to Close Opportunity.</p>
-            )}
-
-            {item.status === 'QA_VERIFICATION' && isQA && (
-              <div className="space-y-4">
-                 {item.type === 'RISK' ? (
-                   <>
-                    <div className="bg-indigo-50 p-4 rounded border border-indigo-100">
-                        <h4 className="font-bold text-indigo-900 mb-2">Reassessment Data Submitted</h4>
-                        <p className="text-sm">Residual Rating: <strong>{item.residualLikelihood} x {item.residualSeverity} = {item.residualRiskRating} ({item.residualRiskLevel})</strong></p>
-                        <p className="text-sm mt-1">Remarks: {item.effectivenessRemarks}</p>
                     </div>
-                    <div className="flex gap-4">
-                        <button onClick={handleRejectReassessment} className="flex-1 border border-red-300 text-red-700 py-2 rounded font-bold hover:bg-red-50 flex items-center justify-center gap-2">
-                          <RotateCcw size={16} /> Reject & Request Re-Eval
-                        </button>
-                        <button onClick={handleFinalClose} className="flex-[2] bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700">
-                          Verify & Close Registry Entry
-                        </button>
+                    <div>
+                        <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Effectiveness / Completion Remarks</span>
+                        {isQA && item.status !== 'CLOSED' ? (
+                            <textarea 
+                                className="w-full p-2 border rounded bg-white text-gray-900" 
+                                value={reassessment.remarks}
+                                onChange={e => setReassessment({...reassessment, remarks: e.target.value})}
+                                placeholder="Enter QA remarks here..."
+                            />
+                        ) : (
+                            <p className="p-3 bg-white border rounded text-gray-800 text-sm">{item.effectivenessRemarks || 'No remarks.'}</p>
+                        )}
                     </div>
-                   </>
-                 ) : (
-                    <div className="space-y-4">
-                       <h4 className="font-bold text-indigo-900 border-b border-indigo-100 pb-2">Final Opportunity Review</h4>
-                       <p className="text-sm text-gray-600">All actions for this opportunity have been verified. Please add remarks and close.</p>
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">QA Remarks</label>
-                          <textarea 
-                            className="w-full border rounded p-2 h-24 bg-white text-gray-900 border-gray-300" 
-                            placeholder="Final remarks on the opportunity outcome..."
-                            value={reassessment.remarks} 
-                            onChange={e => setReassessment({...reassessment, remarks: e.target.value})} 
-                          />
-                       </div>
-                       <button onClick={handleFinalClose} className="w-full bg-green-600 text-white py-2 rounded font-bold hover:bg-green-700">
-                          Close Opportunity
-                       </button>
-                    </div>
-                 )}
-              </div>
-            )}
-
-            {item.status === 'CLOSED' && (
-              <div className="space-y-4">
-                <p className="text-green-700 font-medium flex items-center gap-2">
-                  <CheckCircle2 size={18} /> This entry is verified and closed on {item.closedAt}.
-                </p>
-                {item.effectivenessRemarks && (
-                   <div className="bg-white p-3 border rounded text-sm text-gray-600">
-                      <strong>QA/Final Remarks:</strong> {item.effectivenessRemarks}
-                      {item.type === 'RISK' && item.residualRiskRating && (
-                         <span className="block mt-1">Residual Risk Level: {item.residualRiskLevel} ({item.residualRiskRating})</span>
-                      )}
-                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const Wizard = ({ section, onCancel, onSubmit }: { section: string, onCancel: () => void, onSubmit: (item: RegistryItem) => void }) => {
-  const [step, setStep] = useState(1);
-  const [data, setData] = useState<Partial<RegistryItem>>({
-    section: section,
-    type: 'RISK',
-    likelihood: 1,
-    severity: 1,
-    status: 'PLAN_REVIEW',
-    actionPlans: []
-  });
-
-  // State for adding new action plans
-  const [showActionForm, setShowActionForm] = useState(false);
-  const [tempAction, setTempAction] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
-  const [otherSource, setOtherSource] = useState('');
-
-  // Re-calculate risk
-  useEffect(() => {
-    if (data.type === 'RISK' && data.likelihood && data.severity) {
-      const rating = data.likelihood * data.severity;
-      const level = calculateRiskLevel(data.likelihood, data.severity);
-      setData(prev => ({ ...prev, riskRating: rating, riskLevel: level }));
-    }
-  }, [data.likelihood, data.severity, data.type]);
-
-  const handleChange = (field: keyof RegistryItem, value: any) => {
-    setData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const addActionPlan = () => {
-    if(!tempAction.description || !tempAction.responsiblePerson || !tempAction.targetDate || !tempAction.strategy || !tempAction.evidence) return;
-    
-    const newAction: ActionPlan = {
-      id: `AP-${Date.now()}`,
-      strategy: tempAction.strategy,
-      description: tempAction.description,
-      evidence: tempAction.evidence,
-      responsiblePerson: tempAction.responsiblePerson,
-      targetDate: tempAction.targetDate,
-      status: 'PENDING_APPROVAL'
-    };
-
-    setData(prev => ({
-      ...prev,
-      actionPlans: [...(prev.actionPlans || []), newAction]
-    }));
-    setTempAction({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
-  };
-
-  const isHighRisk = data.type === 'RISK' && (data.riskLevel === 'HIGH' || data.riskLevel === 'CRITICAL');
-  const needsMandatoryAction = isHighRisk || data.type === 'OPPORTUNITY';
-
-  // --- Steps Renders ---
-
-  const renderStep1 = () => (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Entry Type</label>
-          <div className="flex space-x-2">
-            <button 
-              type="button"
-              onClick={() => handleChange('type', 'RISK')}
-              className={`flex-1 py-3 px-4 rounded-lg border flex items-center justify-center gap-2 ${data.type === 'RISK' ? 'bg-red-50 border-red-500 text-red-700 ring-1 ring-red-500' : 'bg-white border-gray-200 text-gray-500'}`}
-            >
-              <AlertTriangle size={18} /> Risk
-            </button>
-            <button 
-              type="button"
-              onClick={() => handleChange('type', 'OPPORTUNITY')}
-              className={`flex-1 py-3 px-4 rounded-lg border flex items-center justify-center gap-2 ${data.type === 'OPPORTUNITY' ? 'bg-green-50 border-green-500 text-green-700 ring-1 ring-green-500' : 'bg-white border-gray-200 text-gray-500'}`}
-            >
-              <Lightbulb size={18} /> Opportunity
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-          <select 
-            className="w-full p-3 border rounded-lg bg-white text-gray-900 border-gray-300"
-            value={data.source}
-            onChange={(e) => handleChange('source', e.target.value)}
-          >
-            <option value="">Select Source...</option>
-            {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          {data.source === 'Others' && (
-            <input 
-              type="text" 
-              placeholder="Please specify..."
-              className="w-full p-3 border rounded-lg mt-2 bg-white text-gray-900 border-gray-300"
-              value={otherSource}
-              onChange={(e) => setOtherSource(e.target.value)}
-            />
-          )}
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Process / Function</label>
-        <input 
-          type="text" 
-          className="w-full p-3 border rounded-lg bg-white text-gray-900 border-gray-300"
-          placeholder="e.g., Patient Admission, Drug Dispensing"
-          value={data.process}
-          onChange={(e) => handleChange('process', e.target.value)}
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description of {data.type === 'RISK' ? 'Risk' : 'Opportunity'}</label>
-        <textarea 
-          className="w-full p-3 border rounded-lg h-32 bg-white text-gray-900 border-gray-300"
-          placeholder={`Describe the ${data.type?.toLowerCase()} clearly...`}
-          value={data.description}
-          onChange={(e) => handleChange('description', e.target.value)}
-        />
-      </div>
-    </div>
-  );
-
-  const renderStep2 = () => (
-    <div className="space-y-6 animate-fadeIn">
-      {data.type === 'RISK' ? (
-        <>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Potential Impact on QMS / Patient Safety</label>
-            <textarea 
-              className="w-full p-3 border rounded-lg h-24 bg-white text-gray-900 border-gray-300"
-              placeholder="What happens if this risk materializes?"
-              value={data.impactQMS}
-              onChange={(e) => handleChange('impactQMS', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Existing Controls / Current Mitigation</label>
-            <textarea 
-              className="w-full p-3 border rounded-lg h-24 bg-white text-gray-900 border-gray-300"
-              placeholder="What mechanisms are currently in place?"
-              value={data.existingControls}
-              onChange={(e) => handleChange('existingControls', e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-8 pt-4">
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2"><Activity size={18}/> Risk Matrix Input</h4>
-              <div className="mb-6">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Likelihood (1-5)</label>
-                <input 
-                  type="range" min="1" max="5" 
-                  value={data.likelihood} 
-                  onChange={(e) => handleChange('likelihood', parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600"
-                />
-                <div className="text-xs text-gray-400 mt-2 font-medium">{LIKELIHOOD_DESC[data.likelihood || 1]}</div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Severity (1-5)</label>
-                <input 
-                  type="range" min="1" max="5" 
-                  value={data.severity} 
-                  onChange={(e) => handleChange('severity', parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600"
-                />
-                 <div className="text-xs text-gray-400 mt-2 font-medium">{SEVERITY_DESC[data.severity || 1]}</div>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4">
-              <div className="flex-1 flex flex-col items-center justify-center p-6 bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-                <span className="text-gray-500 text-sm font-medium mb-2">Computed Risk Level</span>
-                <div className={`text-6xl font-bold mb-2 ${
-                  data.riskLevel === 'CRITICAL' ? 'text-red-600' :
-                  data.riskLevel === 'HIGH' ? 'text-orange-500' :
-                  data.riskLevel === 'MODERATE' ? 'text-yellow-500' : 'text-green-500'
-                }`}>
-                  {data.riskRating}
-                </div>
-                <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider ${getRiskColor(data.riskLevel)}`}>
-                  {data.riskLevel}
-                </span>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="bg-green-50 p-4 rounded-lg text-green-800 text-sm mb-4 flex items-center gap-2">
-            <Info size={16} />
-            For Opportunities, risk scoring is skipped. Focus on benefits.
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Expected Benefit</label>
-            <textarea 
-              className="w-full p-3 border rounded-lg h-32 bg-white text-gray-900 border-gray-300"
-              placeholder="What is the positive outcome?"
-              value={data.expectedBenefit}
-              onChange={(e) => handleChange('expectedBenefit', e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Feasibility</label>
-            <select 
-              className="w-full p-3 border rounded-lg bg-white text-gray-900 border-gray-300"
-              value={data.feasibility}
-              onChange={(e) => handleChange('feasibility', e.target.value)}
-            >
-              <option value="LOW">Low - Hard to implement</option>
-              <option value="MEDIUM">Medium - Manageable</option>
-              <option value="HIGH">High - Easy win</option>
-            </select>
-          </div>
-        </>
-      )}
-    </div>
-  );
-
-  const renderStep3 = () => {
-    const strategies = data.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
-    const selectedStrategyInfo = tempAction.strategy ? strategies[tempAction.strategy] : null;
-
-    return (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-        <h3 className="text-lg font-bold text-gray-900 mb-2">Review Summary</h3>
-        <p className="text-sm text-gray-600 mb-4">Please review your assessment before adding action plans.</p>
-        
-        <div className="grid grid-cols-2 gap-y-2 text-sm">
-           <div className="text-gray-500">Description</div>
-           <div className="font-medium text-gray-900">{data.description}</div>
-           
-           <div className="text-gray-500">{data.type === 'RISK' ? 'Risk Level' : 'Feasibility'}</div>
-           <div className={`font-bold ${data.type === 'RISK' ? (data.riskLevel === 'HIGH' || data.riskLevel === 'CRITICAL' ? 'text-red-600' : 'text-gray-900') : 'text-green-600'}`}>
-              {data.type === 'RISK' ? `${data.riskRating} (${data.riskLevel})` : data.feasibility}
-           </div>
-        </div>
-      </div>
-
-      <div className="pt-4 border-t">
-        {needsMandatoryAction && (
-          <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex items-center gap-2 mb-4">
-            <AlertTriangle size={18} />
-            <span className="text-sm font-bold">Action Plan is MANDATORY for {data.type === 'RISK' ? 'High/Critical Risks' : 'Opportunities'}.</span>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-gray-900">Action Plans</h3>
-          {(!needsMandatoryAction && data.actionPlans?.length === 0 && !showActionForm) && (
-             <button onClick={() => setShowActionForm(true)} className="text-osmak-600 text-sm font-semibold hover:underline">
-               + Add Optional Action Plan
-             </button>
-          )}
-        </div>
-
-        {/* List of added plans */}
-        {data.actionPlans?.length > 0 && (
-          <div className="space-y-3 mb-6">
-            {data.actionPlans.map((plan, idx) => (
-              <div key={idx} className="bg-white border rounded-lg p-4 shadow-sm flex justify-between items-start">
-                 <div>
-                   <p className="text-xs font-bold uppercase text-gray-500 mb-1">{plan.strategy}</p>
-                   <p className="font-semibold text-gray-900">{plan.description}</p>
-                   <p className="text-xs text-gray-500 italic mt-1">Evidence: {plan.evidence}</p>
-                   <p className="text-xs text-gray-500 mt-1">
-                     <span className="font-medium text-gray-700">{plan.responsiblePerson}</span> • By {plan.targetDate}
-                   </p>
                  </div>
-                 <button 
-                  onClick={() => setData(prev => ({...prev, actionPlans: prev.actionPlans?.filter((_, i) => i !== idx)}))}
-                  className="text-gray-400 hover:text-red-500"
-                 >
-                   <Trash2 size={16} />
-                 </button>
+                 
+                 {isQA && item.status !== 'CLOSED' && (
+                    <div className="flex flex-col justify-end gap-3">
+                        <div className="text-sm text-gray-600 italic bg-blue-50 p-3 rounded">
+                            Review the evidence in the Action Plans above. If satisfied, verify and close.
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={handleFinalClose} className="flex-1 bg-green-700 text-white font-bold py-3 rounded hover:bg-green-800 shadow-sm flex justify-center items-center gap-2">
+                                <CheckCircle2 size={18}/> Verify & Close Registry Entry
+                            </button>
+                            <button onClick={handleRejectReassessment} className="px-4 py-3 bg-red-100 text-red-700 font-bold rounded hover:bg-red-200 border border-red-200">
+                                Reject & Request Re-Eval
+                            </button>
+                        </div>
+                    </div>
+                 )}
+                 {item.status === 'CLOSED' && (
+                     <div className="flex flex-col justify-end">
+                         <div className="bg-green-50 border border-green-200 p-4 rounded-lg flex items-center gap-3">
+                             <CheckCircle2 size={24} className="text-green-600"/>
+                             <div>
+                                 <h4 className="font-bold text-green-900">Closed by Quality Assurance</h4>
+                                 <p className="text-xs text-green-700">Date Closed: {item.closedAt}</p>
+                             </div>
+                         </div>
+                     </div>
+                 )}
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* Input Form */}
-        {(showActionForm || needsMandatoryAction || data.actionPlans?.length > 0) && (
-          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-             <h4 className="text-sm font-bold text-blue-800 mb-3">New Action Plan Details</h4>
-             <div className="space-y-3">
-               <div>
-                 <select 
-                   className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
-                   value={tempAction.strategy}
-                   onChange={e => setTempAction({...tempAction, strategy: e.target.value})}
-                 >
-                   <option value="">Select Strategy</option>
-                   {Object.keys(strategies).map(s => <option key={s} value={s}>{s}</option>)}
-                 </select>
-                 {selectedStrategyInfo && (
-                   <div className="mt-2 text-xs text-blue-800 bg-blue-100/50 p-2 rounded">
-                     <strong>{selectedStrategyInfo.desc}</strong> <br/>
-                     <span className="italic">Example: {selectedStrategyInfo.ex}</span>
-                   </div>
-                 )}
-               </div>
-               <textarea 
-                 placeholder="Specific action steps..."
-                 className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
-                 value={tempAction.description}
-                 onChange={e => setTempAction({...tempAction, description: e.target.value})}
-               />
-               <input 
-                 type="text" 
-                 placeholder="Verification / Evidence (e.g., Photo log, Certificate)"
-                 className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
-                 value={tempAction.evidence}
-                 onChange={e => setTempAction({...tempAction, evidence: e.target.value})}
-               />
-               <div className="grid grid-cols-2 gap-3">
-                 <input 
-                   type="text" 
-                   placeholder="Responsible Person"
-                   className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
-                   value={tempAction.responsiblePerson}
-                   onChange={e => setTempAction({...tempAction, responsiblePerson: e.target.value})}
-                 />
-                 <input 
-                   type="date" 
-                   className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
-                   value={tempAction.targetDate}
-                   onChange={e => setTempAction({...tempAction, targetDate: e.target.value})}
-                 />
-               </div>
-               <button 
-                 onClick={addActionPlan}
-                 disabled={!tempAction.description || !tempAction.responsiblePerson || !tempAction.targetDate || !tempAction.strategy || !tempAction.evidence}
-                 className="w-full bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-               >
-                 Add Action to List
-               </button>
-             </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )};
-
-  const steps = [
-    { num: 1, title: 'Context' },
-    { num: 2, title: 'Assessment' },
-    { num: 3, title: 'Actions & Submit' }
-  ];
-
-  const canSubmit = () => {
-    if (step === 1) {
-       // Step 1 Validation
-       if (!data.description || !data.process || !data.source) return false;
-       if (data.source === 'Others' && !otherSource) return false;
-       return true;
-    }
-    if (step === 2) {
-       // Step 2 Validation
-       if (data.type === 'RISK') {
-          return !!data.impactQMS && !!data.existingControls;
-       } else {
-          return !!data.expectedBenefit;
-       }
-    }
-    // Step 3 Validation
-    if (needsMandatoryAction && (!data.actionPlans || data.actionPlans.length === 0)) return false;
-    return true;
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">New Registry Entry</h2>
-            <p className="text-sm text-gray-500">Step {step} of 3: {steps[step-1].title}</p>
-          </div>
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
-            <LogOut size={20} />
-          </button>
-        </div>
-        
-        {/* Progress Bar */}
-        <div className="w-full bg-gray-200 h-1.5">
-          <div className="bg-osmak-600 h-1.5 transition-all duration-300" style={{ width: `${(step/3)*100}%` }}></div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t flex justify-between items-center bg-gray-50 rounded-b-2xl">
-          <button 
-            onClick={() => step > 1 ? setStep(s => s - 1) : onCancel()}
-            className="px-6 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-100 transition"
-          >
-            {step === 1 ? 'Cancel' : 'Back'}
-          </button>
-          
-          <button 
-            onClick={() => {
-              if (step < 3) {
-                setStep(s => s + 1);
-              } else {
-                const finalSource = data.source === 'Others' ? `Others: ${otherSource}` : data.source;
-                onSubmit({
-                  ...data,
-                  source: finalSource,
-                  id: `${data.type === 'RISK' ? 'R' : 'O'}-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}`,
-                  createdAt: new Date().toISOString().split('T')[0]
-                } as RegistryItem);
-              }
-            }}
-            disabled={!canSubmit()}
-            className="px-8 py-2.5 rounded-lg bg-osmak-700 text-white font-medium hover:bg-osmak-800 transition shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {step === 3 ? (
-              <>Submit Entry <CheckCircle2 size={18} /></>
-            ) : (
-              <>Next Step <ChevronRight size={18} /></>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SectionView = ({ sectionName, entries, onNewEntry, onItemClick, mode = 'OVERVIEW', readOnly }: { sectionName: string, entries: RegistryItem[], onNewEntry: () => void, onItemClick: (i: RegistryItem) => void, mode?: 'OVERVIEW' | 'RISKS' | 'OPPORTUNITIES' | 'ALL_OPEN_RISKS' | 'ALL_OPEN_OPPS', readOnly?: boolean }) => {
-  // State for collapsible QA section views
-  const [showClosedRisks, setShowClosedRisks] = useState(false);
-  const [showClosedOpps, setShowClosedOpps] = useState(false);
-
-  // --- Stats Calculation ---
-  const totalHighRisk = entries.filter(e => e.type === 'RISK' && (e.riskLevel === 'HIGH' || e.riskLevel === 'CRITICAL')).length;
-  const openHighRisk = entries.filter(e => e.type === 'RISK' && (e.riskLevel === 'HIGH' || e.riskLevel === 'CRITICAL') && e.status !== 'CLOSED').length;
-  const totalOpenRisk = entries.filter(e => e.type === 'RISK' && e.status !== 'CLOSED').length;
-  const totalOpenOpp = entries.filter(e => e.type === 'OPPORTUNITY' && e.status !== 'CLOSED').length;
-
-  // --- Filtered Lists based on Mode ---
-  const openRisks = entries.filter(e => e.type === 'RISK' && e.status !== 'CLOSED');
-  const openOpps = entries.filter(e => e.type === 'OPPORTUNITY' && e.status !== 'CLOSED');
-  const closedRisks = entries.filter(e => e.type === 'RISK' && e.status === 'CLOSED');
-  const closedOpps = entries.filter(e => e.type === 'OPPORTUNITY' && e.status === 'CLOSED');
-
-  const Table = ({ items, title, icon, showDays = false }: { items: RegistryItem[], title: string, icon: React.ReactNode, showDays?: boolean }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-        {icon}
-        <h3 className="font-bold text-gray-800">{title}</h3>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-gray-500 uppercase font-medium text-xs">
-            <tr>
-              <th className="px-6 py-4">ID</th>
-              {mode.includes('ALL') && <th className="px-6 py-4">Section</th>}
-              <th className="px-6 py-4">Description</th>
-              <th className="px-6 py-4">Rating/Feasibility</th>
-              <th className="px-6 py-4">Action Plans</th>
-              {showDays && <th className="px-6 py-4">Due In</th>}
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {items.map(entry => {
-              const daysRemaining = showDays ? getDaysRemaining(entry) : null;
-              return (
-              <tr key={entry.id} onClick={() => onItemClick(entry)} className="hover:bg-gray-50 transition cursor-pointer group">
-                <td className="px-6 py-4 font-mono text-gray-500">{entry.id}</td>
-                {mode.includes('ALL') && <td className="px-6 py-4 font-medium text-gray-900">{entry.section}</td>}
-                <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate">{entry.description}</td>
-                <td className="px-6 py-4">
-                  {entry.type === 'RISK' ? (
-                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${getRiskColor(entry.riskLevel)}`}>{entry.riskRating} ({entry.riskLevel})</span>
-                  ) : (
-                     <span className="text-green-600 font-bold">{entry.feasibility}</span>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <span className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded text-xs font-medium text-gray-600">
-                    <ClipboardCheck size={12} /> {entry.actionPlans.length}
-                  </span>
-                </td>
-                {showDays && (
-                   <td className="px-6 py-4">
-                      {daysRemaining ? (
-                        <span className={`text-xs ${daysRemaining.color}`}>{daysRemaining.label}</span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                   </td>
-                )}
-                <td className="px-6 py-4">
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(entry.status)}`}>
-                    {formatStatus(entry.status)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-gray-400 group-hover:text-osmak-600">
-                  <ChevronRight size={16} />
-                </td>
-              </tr>
-            )})}
-          </tbody>
-        </table>
-        {items.length === 0 && <div className="p-8 text-center text-gray-500">No entries found.</div>}
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Header */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {mode === 'OVERVIEW' && 'Risk and Opportunities Registry'}
-            {mode === 'RISKS' && 'Risk Registry'}
-            {mode === 'OPPORTUNITIES' && 'Opportunities Registry'}
-          </h1>
-          <p className="text-gray-500">
-            Overview for <span className="font-semibold text-osmak-700">{sectionName}</span>
-          </p>
-        </div>
-        {!readOnly && (
-          <button 
-            onClick={onNewEntry}
-            className="bg-osmak-600 hover:bg-osmak-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-md flex items-center gap-2 transition"
-          >
-            <PlusCircle size={20} /> New Entry
-          </button>
-        )}
-      </div>
-
-      {/* Stats Cards - Only on Overview */}
-      {mode === 'OVERVIEW' && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-red-50 p-5 rounded-xl border border-red-100">
-            <span className="text-xs font-bold text-red-600 uppercase">Open High/Critical</span>
-            <p className="text-3xl font-bold text-red-900 mt-2">{openHighRisk}</p>
-          </div>
-          <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
-            <span className="text-xs font-bold text-orange-600 uppercase">Total High/Critical</span>
-            <p className="text-3xl font-bold text-orange-900 mt-2">{totalHighRisk}</p>
-          </div>
-          <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
-            <span className="text-xs font-bold text-blue-600 uppercase">Total Open Risks</span>
-            <p className="text-3xl font-bold text-blue-900 mt-2">{totalOpenRisk}</p>
-          </div>
-          <div className="bg-green-50 p-5 rounded-xl border border-green-100">
-            <span className="text-xs font-bold text-green-600 uppercase">Total Open Opps</span>
-            <p className="text-3xl font-bold text-green-900 mt-2">{totalOpenOpp}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tables based on Mode */}
-      {mode === 'OVERVIEW' && (
-        <>
-          <Table items={openRisks} title="Open Risks Registry" icon={<ShieldAlert className="text-red-600"/>} showDays={true} />
-          <Table items={openOpps} title="Open Opportunities Registry" icon={<Lightbulb className="text-green-600"/>} showDays={true} />
-          
-          {/* Collapsible Closed Registries for QA View */}
-          {readOnly && (
-            <div className="space-y-4 pt-8 border-t">
-               <h3 className="text-lg font-bold text-gray-500 uppercase tracking-wide">Closed Registries</h3>
-               
-               {/* Closed Risks */}
-               <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-                 <button 
-                  onClick={() => setShowClosedRisks(!showClosedRisks)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
-                 >
-                    <div className="flex items-center gap-2 font-bold text-gray-700">
-                       <CheckCircle2 size={18} /> Closed Risks Registry ({closedRisks.length})
-                    </div>
-                    {showClosedRisks ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                 </button>
-                 {showClosedRisks && (
-                    <div className="p-4 border-t border-gray-100">
-                        <Table items={closedRisks} title="Closed Risks" icon={<CheckCircle2 className="text-gray-500"/>} />
-                    </div>
-                 )}
-               </div>
-
-               {/* Closed Opportunities */}
-               <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-                 <button 
-                  onClick={() => setShowClosedOpps(!showClosedOpps)}
-                  className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition"
-                 >
-                    <div className="flex items-center gap-2 font-bold text-gray-700">
-                       <CheckCircle2 size={18} /> Closed Opportunities Registry ({closedOpps.length})
-                    </div>
-                    {showClosedOpps ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                 </button>
-                 {showClosedOpps && (
-                    <div className="p-4 border-t border-gray-100">
-                        <Table items={closedOpps} title="Closed Opportunities" icon={<CheckCircle2 className="text-gray-500"/>} />
-                    </div>
-                 )}
-               </div>
             </div>
           )}
-        </>
-      )}
 
-      {mode === 'RISKS' && (
-        <>
-          <Table items={openRisks} title="Open Risks Registry" icon={<ShieldAlert className="text-red-600"/>} showDays={true} />
-          <Table items={closedRisks} title="Closed Risks Registry" icon={<CheckCircle2 className="text-gray-600"/>} />
-        </>
-      )}
+          {/* Delete & Reopen Zone */}
+          <div className="pt-8 border-t flex justify-between">
+              <div>
+                  {isQA && item.status === 'CLOSED' && (
+                      <button 
+                          onClick={() => setShowReopenConfirm(true)}
+                          className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-800 px-3 py-2 rounded hover:bg-orange-50 transition"
+                      >
+                          <RotateCcw size={16}/> Reopen Entry
+                      </button>
+                  )}
+              </div>
+              <button 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 px-3 py-2 rounded hover:bg-red-50 transition"
+              >
+                  <Trash2 size={16}/> Delete Entry
+              </button>
+          </div>
 
-      {mode === 'OPPORTUNITIES' && (
-        <>
-          <Table items={openOpps} title="Open Opportunities Registry" icon={<Lightbulb className="text-green-600"/>} showDays={true} />
-          <Table items={closedOpps} title="Closed Opportunities Registry" icon={<CheckCircle2 className="text-gray-600"/>} />
-        </>
-      )}
-    </div>
-  );
-};
+          {/* Confirmation Modals */}
+          {showDeleteConfirm && (
+              <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center p-8 animate-fadeIn">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Deletion</h3>
+                  <p className="text-gray-600 mb-4 text-center">This action cannot be undone. Please enter your password to confirm.</p>
+                  <input 
+                      type="password" 
+                      className="border p-2 rounded w-64 mb-2 bg-white text-gray-900"
+                      placeholder="Password"
+                      value={deletePassword}
+                      onChange={e => setDeletePassword(e.target.value)}
+                  />
+                  {deleteError && <p className="text-red-500 text-xs mb-2">{deleteError}</p>}
+                  <div className="flex gap-2">
+                      <button onClick={confirmDelete} className="bg-red-600 text-white px-4 py-2 rounded font-bold">Confirm Delete</button>
+                      <button onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); setDeleteError(''); }} className="bg-gray-200 text-gray-800 px-4 py-2 rounded">Cancel</button>
+                  </div>
+              </div>
+          )}
 
-const QADashboard = ({ entries, onItemClick }: { entries: RegistryItem[], onItemClick: (i: RegistryItem) => void }) => {
-  const highRisks = entries.filter(e => e.type === 'RISK' && (e.riskLevel === 'HIGH' || e.riskLevel === 'CRITICAL')).length;
-  const openItems = entries.filter(e => e.status !== 'CLOSED').length;
-  const closedItems = entries.filter(e => e.status === 'CLOSED').length;
-  const pendingReview = entries.filter(e => e.status === 'PLAN_REVIEW').length;
-  const forVerification = entries.filter(e => e.status === 'QA_VERIFICATION').length;
+          {showReopenConfirm && (
+              <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center p-8 animate-fadeIn">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Reopen</h3>
+                  <p className="text-gray-600 mb-4 text-center">Status will revert to IMPLEMENTATION. Enter password to confirm.</p>
+                  <input 
+                      type="password" 
+                      className="border p-2 rounded w-64 mb-2 bg-white text-gray-900"
+                      placeholder="Password"
+                      value={reopenPassword}
+                      onChange={e => setReopenPassword(e.target.value)}
+                  />
+                  {reopenError && <p className="text-red-500 text-xs mb-2">{reopenError}</p>}
+                  <div className="flex gap-2">
+                      <button onClick={confirmReopen} className="bg-orange-600 text-white px-4 py-2 rounded font-bold">Confirm Reopen</button>
+                      <button onClick={() => { setShowReopenConfirm(false); setReopenPassword(''); setReopenError(''); }} className="bg-gray-200 text-gray-800 px-4 py-2 rounded">Cancel</button>
+                  </div>
+              </div>
+          )}
 
-  // Filter pending tasks for QA (Plan Review or Verification)
-  const pendingTasks = entries.filter(e => e.status === 'PLAN_REVIEW' || e.status === 'QA_VERIFICATION' || e.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION'));
-
-  return (
-    <div className="space-y-8 animate-fadeIn">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">QA Command Center</h1>
-        <p className="text-gray-500">Hospital-Wide Risk & Opportunity Overview</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-         <div className="bg-red-50 p-4 rounded-xl border border-red-100">
-           <span className="text-xs font-bold text-red-600 uppercase">Total High Risks</span>
-           <p className="text-2xl font-bold text-red-900 mt-1">{highRisks}</p>
-         </div>
-         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-           <span className="text-xs font-bold text-blue-600 uppercase">Total Open</span>
-           <p className="text-2xl font-bold text-blue-900 mt-1">{openItems}</p>
-         </div>
-         <div className="bg-green-50 p-4 rounded-xl border border-green-100">
-           <span className="text-xs font-bold text-green-600 uppercase">Total Closed</span>
-           <p className="text-2xl font-bold text-green-900 mt-1">{closedItems}</p>
-         </div>
-         <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-           <span className="text-xs font-bold text-indigo-600 uppercase">Plan Review</span>
-           <p className="text-2xl font-bold text-indigo-900 mt-1">{pendingReview}</p>
-         </div>
-         <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
-           <span className="text-xs font-bold text-purple-600 uppercase">For Verification</span>
-           <p className="text-2xl font-bold text-purple-900 mt-1">{forVerification}</p>
-         </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-2">
-          <ClipboardList className="text-indigo-600" size={20} />
-          <h3 className="font-bold text-gray-800">Pending Tasks for QA</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase font-medium text-xs">
-              <tr>
-                <th className="px-6 py-4">Section</th>
-                <th className="px-6 py-4">ID</th>
-                <th className="px-6 py-4">Task Type</th>
-                <th className="px-6 py-4">Description</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {pendingTasks.length === 0 ? (
-                <tr><td colSpan={6} className="p-6 text-center text-gray-500">No pending tasks.</td></tr>
-              ) : pendingTasks.map(entry => {
-                let taskLabel = 'Review Plans';
-                let taskColor = 'text-indigo-600';
-                if (entry.status === 'QA_VERIFICATION') {
-                   taskLabel = 'Final Verification';
-                   taskColor = 'text-purple-600';
-                } else if (entry.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION')) {
-                   taskLabel = 'Verify Implementation';
-                   taskColor = 'text-green-600';
-                }
-
-                return (
-                <tr key={entry.id} onClick={() => onItemClick(entry)} className="hover:bg-gray-50 transition cursor-pointer group">
-                  <td className="px-6 py-4 font-medium text-gray-900">{entry.section}</td>
-                  <td className="px-6 py-4 font-mono text-gray-500">{entry.id}</td>
-                  <td className="px-6 py-4">
-                     <span className={`font-bold ${taskColor}`}>{taskLabel}</span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-500 max-w-xs truncate">{entry.description}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(entry.status)}`}>
-                      {formatStatus(entry.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400 group-hover:text-osmak-600">
-                    <Eye size={16} />
-                  </td>
-                </tr>
-              )})}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>
   );
 };
 
-const RecentActivity = ({ entries, onItemClick }: { entries: RegistryItem[], onItemClick: (i: RegistryItem) => void }) => {
-  // Sort by created_at desc
-  const sortedEntries = [...entries].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  return (
-    <div className="space-y-8 animate-fadeIn">
-      <div className="flex items-center gap-2">
-         <History className="text-gray-700" size={28} />
-         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Recent Activity</h1>
-          <p className="text-gray-500">Activity stream across all sections</p>
-         </div>
-      </div>
-      
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase font-medium text-xs">
-              <tr>
-                <th className="px-6 py-4">Section</th>
-                <th className="px-6 py-4">ID</th>
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Description</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {sortedEntries.map(entry => (
-                <tr key={entry.id} onClick={() => onItemClick(entry)} className="hover:bg-gray-50 transition cursor-pointer group">
-                  <td className="px-6 py-4 font-medium text-gray-900">{entry.section}</td>
-                  <td className="px-6 py-4 font-mono text-gray-500">{entry.id}</td>
-                  <td className="px-6 py-4">
-                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${entry.type === 'RISK' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                        {entry.type === 'RISK' ? <ShieldAlert size={12} /> : <Lightbulb size={12} />}
-                        {entry.type}
-                      </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-500 max-w-xs truncate">{entry.description}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(entry.status)}`}>
-                      {formatStatus(entry.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-400 group-hover:text-osmak-600">
-                    <Eye size={16} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const App = () => {
+// --- Main App Component ---
+function App() {
   const [user, setUser] = useState<string | null>(null);
-  const [isQA, setIsQA] = useState(false);
-  const [qaSelectedSection, setQaSelectedSection] = useState<string | null>(null);
-  
-  const [view, setView] = useState<'DASHBOARD' | 'WIZARD' | 'RISKS' | 'OPPORTUNITIES' | 'RECENT_ACTIVITY' | 'ALL_OPEN_RISKS' | 'ALL_OPEN_OPPS'>('DASHBOARD');
-  
-  // Data State
-  const [entries, setEntries] = useState<RegistryItem[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [items, setItems] = useState<RegistryItem[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Navigation & View State
+  const [currentView, setCurrentView] = useState('dashboard');
   const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
+  const [showWizard, setShowWizard] = useState(false);
+  const [auditTrailItem, setAuditTrailItem] = useState<RegistryItem | null>(null);
 
-  // Fetch Data from Supabase
-  const fetchEntries = async () => {
+  // Filters
+  const [filterYear, setFilterYear] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterType, setFilterType] = useState<string>('All');
+
+  // Sorting
+  const [sortConfig, setSortConfig] = useState<{ key: keyof RegistryItem, direction: 'asc' | 'desc' } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      fetchItems();
+    }
+  }, [user]);
+
+  const fetchItems = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('registry_items').select('*');
-    if (error) {
-      console.error('Error fetching data:', error);
-      alert('Failed to connect to database. Please check configuration.');
-    } else {
-      setEntries(data.map(mapFromDb));
+    if (data) {
+      const parsed = data.map(mapFromDb);
+      setItems(parsed);
     }
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchEntries();
-  }, []);
-
   const handleLogin = (section: string) => {
     setUser(section);
-    setIsQA(section.includes('QA'));
+    setIsAdmin(section === 'QA (Quality Assurance)');
   };
 
-  const handleUpdateItem = async (updated: RegistryItem) => {
-    // Optimistic Update
-    setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
-    setSelectedItem(updated);
+  const handleLogout = () => {
+    setUser(null);
+    setIsAdmin(false);
+    setItems([]);
+    setCurrentView('dashboard');
+  };
 
-    // DB Update
-    const { error } = await supabase
-      .from('registry_items')
-      .update(mapToDb(updated))
-      .eq('id', updated.id);
-
-    if (error) {
-      console.error("Update failed", error);
-      alert("Failed to save changes to database.");
-      fetchEntries(); // Revert
+  const handleCreate = async (newItem: RegistryItem) => {
+    const itemToSave = { ...newItem, section: user! };
+    // Set initial status to IMPLEMENTATION (skipping Plan Review)
+    // and ensure mandatory action plans logic in wizard is respected
+    const dbPayload = mapToDb(itemToSave);
+    const { error } = await supabase.from('registry_items').insert(dbPayload);
+    if (!error) {
+      fetchItems();
+      setShowWizard(false);
+    } else {
+      alert('Error creating item: ' + error.message);
     }
   };
 
-  const handleSubmitEntry = async (entry: RegistryItem) => {
-    // Optimistic Update
-    setEntries([entry, ...entries]);
-    setView('DASHBOARD');
-
-    // DB Insert
-    const { error } = await supabase
-      .from('registry_items')
-      .insert([mapToDb(entry)]);
-
-    if (error) {
-      console.error("Insert failed", error);
-      alert("Failed to create entry in database.");
-      fetchEntries(); // Revert
+  const handleUpdate = async (updatedItem: RegistryItem) => {
+    const dbPayload = mapToDb(updatedItem);
+    const { error } = await supabase.from('registry_items').update(dbPayload).eq('id', updatedItem.id);
+    if (!error) {
+      setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
     }
   };
 
-  if (loading && !user) {
-     return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-osmak-700 font-bold gap-2"><Loader2 className="animate-spin" /> Loading Registry System...</div>;
-  }
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('registry_items').delete().eq('id', id);
+    if (!error) {
+      setItems(items.filter(i => i.id !== id));
+      setSelectedItem(null);
+    }
+  };
+
+  // --- Derived Data ---
+  
+  const displayIds = useMemo(() => getDisplayIds(items), [items]);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    items.forEach(item => {
+      // Robust check for date existence before split
+      if (item.dateIdentified && typeof item.dateIdentified === 'string') {
+         const y = item.dateIdentified.split('-')[0];
+         if (y) years.add(y);
+      } else if (item.createdAt && typeof item.createdAt === 'string') {
+         const y = item.createdAt.split('-')[0];
+         if (y) years.add(y);
+      }
+    });
+    return Array.from(years).sort().reverse();
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    let filtered = items;
+    
+    // Section Filter (if not Admin viewing global)
+    if (!isAdmin) {
+      filtered = filtered.filter(i => i.section === user);
+    }
+
+    // View-Based Filtering
+    if (currentView === 'pending_tasks') {
+        // QA Pending Tasks: anything not Closed
+        filtered = filtered.filter(i => i.status !== 'CLOSED');
+    } else if (currentView === 'ro_list') {
+        // R&O List: Apply manual filters
+        if (filterYear !== 'All') {
+             filtered = filtered.filter(i => i.dateIdentified?.startsWith(filterYear) || i.createdAt?.startsWith(filterYear));
+        }
+        if (filterStatus !== 'All') {
+             if (filterStatus === 'Open') filtered = filtered.filter(i => i.status !== 'CLOSED');
+             else if (filterStatus === 'Closed') filtered = filtered.filter(i => i.status === 'CLOSED');
+        }
+        if (filterType !== 'All') {
+            filtered = filtered.filter(i => i.type === filterType.toUpperCase());
+        }
+    }
+
+    return filtered;
+  }, [items, isAdmin, user, currentView, filterYear, filterStatus, filterType]);
+
+  const sortedItems = useMemo(() => {
+    let sortable = [...filteredItems];
+    if (sortConfig !== null) {
+      sortable.sort((a, b) => {
+        // Special sorting for "Ref #" using createdAt which mimics the ID order
+        if (sortConfig.key === 'id') {
+             const dateA = new Date(a.createdAt).getTime();
+             const dateB = new Date(b.createdAt).getTime();
+             return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
+        }
+
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    } else {
+      // Default Sort: Newest First
+      sortable.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return sortable;
+  }, [filteredItems, sortConfig]);
+
+  const handleSort = (key: keyof RegistryItem) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // --- Render Helpers ---
+
+  const renderTable = (data: RegistryItem[], columns: any[], onRowClick: any, maxHeight?: string) => (
+    <div className={`overflow-x-auto rounded-lg shadow border border-gray-200 bg-white ${maxHeight ? 'overflow-y-auto ' + maxHeight : ''}`}>
+      <table className="w-full text-sm text-left text-gray-500 relative">
+         <thead className={`text-xs text-gray-700 uppercase bg-gray-50 border-b ${maxHeight ? 'sticky top-0 z-10 shadow-sm' : ''}`}>
+            <tr>
+              {columns.map((col: any) => (
+                <th 
+                    key={col.key} 
+                    className={`px-6 py-3 cursor-pointer hover:bg-gray-100 transition ${col.hidden ? 'hidden md:table-cell' : ''}`}
+                    onClick={() => handleSort(col.sortKey || col.key)}
+                >
+                  <div className="flex items-center gap-1">
+                    {col.label}
+                    <ArrowUpDown size={12} className="opacity-50"/>
+                  </div>
+                </th>
+              ))}
+              <th className="px-6 py-3 text-right">Action</th>
+            </tr>
+         </thead>
+         <tbody className="divide-y divide-gray-100">
+            {data.length === 0 ? (
+                <tr><td colSpan={columns.length + 1} className="px-6 py-8 text-center text-gray-400">No records found.</td></tr>
+            ) : data.map((item) => (
+               <tr key={item.id} onClick={() => onRowClick(item)} className="bg-white hover:bg-gray-50 cursor-pointer transition">
+                  {columns.map((col: any) => (
+                    <td key={col.key} className={`px-6 py-4 font-medium ${col.hidden ? 'hidden md:table-cell' : ''}`}>
+                      {col.render ? col.render(item) : (item as any)[col.key]}
+                    </td>
+                  ))}
+                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => setAuditTrailItem(item)} className="text-gray-400 hover:text-osmak-600 transition p-1 rounded-full hover:bg-gray-100" title="View History">
+                        <History size={16}/>
+                    </button>
+                  </td>
+               </tr>
+            ))}
+         </tbody>
+      </table>
+    </div>
+  );
+
+  const DashboardView = () => {
+    const sectionItems = isAdmin ? items : items.filter(i => i.section === user);
+    
+    // Deadlines Logic
+    const deadlines = sectionItems
+      .filter(i => i.status !== 'CLOSED' && i.actionPlans.some(ap => ap.status !== 'COMPLETED'))
+      .map(item => ({ item, meta: getDaysRemaining(item) }))
+      .filter(x => x.meta !== null)
+      .sort((a, b) => a.meta!.days - b.meta!.days)
+      .slice(0, 4);
+
+    const openRisks = sectionItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
+    const openOpps = sectionItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
+
+    return (
+      <div className="space-y-8 animate-fadeIn">
+        {/* Deadline Cards */}
+        {deadlines.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+             {deadlines.map(({ item, meta }) => (
+               <div key={item.id} onClick={() => setSelectedItem(item)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                     <span className="font-mono text-xs text-gray-400">{displayIds[item.id]}</span>
+                     <span className={`text-xs font-bold uppercase ${meta!.color}`}>{meta!.label}</span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-800 line-clamp-2 mb-2 flex-1">{item.description}</p>
+                  <div className="flex justify-between items-center text-xs mt-auto">
+                     <span className="text-gray-500">{item.section}</span>
+                     <ChevronRight size={14} className="text-gray-400"/>
+                  </div>
+               </div>
+             ))}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+           {/* Open Risks Table */}
+           <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <AlertTriangle className="text-red-500" size={20}/> Open Risks
+                </h3>
+                <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">{openRisks.length}</span>
+              </div>
+              {renderTable(
+                openRisks, 
+                [
+                  { key: 'id', label: 'Ref #', render: (i: RegistryItem) => <span className="font-mono text-xs">{displayIds[i.id]}</span> },
+                  { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="line-clamp-1">{i.description}</span> },
+                  { key: 'riskLevel', label: 'Level', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getRiskColor(i.riskLevel)}`}>{i.riskLevel}</span>},
+                  { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
+                ],
+                setSelectedItem,
+                "max-h-[350px]"
+              )}
+           </div>
+
+           {/* Open Opportunities Table */}
+           <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <Lightbulb className="text-green-500" size={20}/> Open Opportunities
+                </h3>
+                <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded-full">{openOpps.length}</span>
+              </div>
+              {renderTable(
+                openOpps, 
+                [
+                  { key: 'id', label: 'Ref #', render: (i: RegistryItem) => <span className="font-mono text-xs">{displayIds[i.id]}</span> },
+                  { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="line-clamp-1">{i.description}</span> },
+                  { key: 'feasibility', label: 'Feasibility', render: (i: RegistryItem) => <span className="text-xs font-bold text-green-700">{i.feasibility}</span>},
+                  { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
+                ],
+                setSelectedItem,
+                "max-h-[350px]"
+              )}
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ROListView = () => {
+    return (
+        <div className="space-y-4 animate-fadeIn">
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <ListFilter className="text-osmak-green"/> Registry List (R&O)
+                </h2>
+                <div className="flex gap-2">
+                    <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="p-2 border rounded text-sm bg-gray-50">
+                        <option value="All">All Years</option>
+                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="p-2 border rounded text-sm bg-gray-50">
+                        <option value="All">All Types</option>
+                        <option value="Risk">Risks</option>
+                        <option value="Opportunity">Opportunities</option>
+                    </select>
+                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="p-2 border rounded text-sm bg-gray-50">
+                        <option value="All">All Status</option>
+                        <option value="Open">Open</option>
+                        <option value="Closed">Closed</option>
+                    </select>
+                </div>
+            </div>
+
+            {renderTable(
+                sortedItems,
+                [
+                    { key: 'id', label: 'Ref #', sortKey: 'id', render: (i: RegistryItem) => <span className="font-mono font-bold text-osmak-700">{displayIds[i.id]}</span> },
+                    { key: 'dateIdentified', label: 'Date ID', render: (i: RegistryItem) => <span className="text-xs">{i.dateIdentified}</span> },
+                    { key: 'section', label: 'Section', hidden: !isAdmin },
+                    { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="font-medium">{i.description}</span> },
+                    { key: 'type', label: 'Type', render: (i: RegistryItem) => i.type === 'RISK' ? <span className="text-red-600 font-bold text-xs">RISK</span> : <span className="text-green-600 font-bold text-xs">OPP</span> },
+                    { key: 'riskLevel', label: 'Level/Feas.', render: (i: RegistryItem) => i.type === 'RISK' ? <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getRiskColor(i.riskLevel)}`}>{i.riskLevel}</span> : <span className="text-xs font-bold text-green-700">{i.feasibility}</span> },
+                    { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
+                ],
+                setSelectedItem,
+                "max-h-[550px]"
+            )}
+        </div>
+    );
+  };
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-50 text-gray-800 font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 fixed h-full z-10 hidden md:flex flex-col">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex flex-row items-center gap-3">
-             <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="Logo" className="w-12 h-12" />
-             <span className="text-osmak-900 font-bold text-sm leading-tight">Ospital ng Makati</span>
-          </div>
-        </div>
-        
-        <nav className="flex-1 p-4 overflow-y-auto scrollbar-hide">
-          {isQA ? (
-            <div className="space-y-1">
-              <button onClick={() => { setQaSelectedSection(null); setView('DASHBOARD'); }} className={`w-full text-left px-3 py-2 rounded text-sm font-bold ${!qaSelectedSection && view === 'DASHBOARD' ? 'bg-osmak-50 text-osmak-800' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <LayoutDashboard size={16} className="inline mr-2" /> Command Center
-              </button>
-              <button onClick={() => { setQaSelectedSection(null); setView('RECENT_ACTIVITY'); }} className={`w-full text-left px-3 py-2 rounded text-sm font-bold ${view === 'RECENT_ACTIVITY' ? 'bg-osmak-50 text-osmak-800' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <History size={16} className="inline mr-2" /> Recent Activity
-              </button>
-              <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-3">Sections</div>
-              {SECTIONS.filter(s => !s.includes('QA')).map(s => (
-                <button 
-                  key={s} 
-                  onClick={() => { setQaSelectedSection(s); setView('DASHBOARD'); }}
-                  className={`w-full text-left px-3 py-2 rounded text-xs font-medium truncate ${qaSelectedSection === s ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <button onClick={() => setView('DASHBOARD')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${view === 'DASHBOARD' ? 'bg-osmak-50 text-osmak-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <LayoutDashboard size={20} /> Dashboard
-              </button>
-              <button onClick={() => setView('RISKS')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${view === 'RISKS' ? 'bg-osmak-50 text-osmak-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <ShieldAlert size={20} /> Risks
-              </button>
-              <button onClick={() => setView('OPPORTUNITIES')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${view === 'OPPORTUNITIES' ? 'bg-osmak-50 text-osmak-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                <Lightbulb size={20} /> Opportunities
-              </button>
-            </div>
-          )}
-        </nav>
+    <div className="min-h-screen bg-[#F0FFF4] flex flex-col md:flex-row">
+      {/* Mobile Sidebar Overlay */}
+      <div className="md:hidden fixed inset-0 bg-black/50 z-40 hidden" id="mobile-overlay"></div>
 
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-4 py-3 mb-2">
-            <div className="w-8 h-8 rounded-full bg-osmak-100 text-osmak-700 flex items-center justify-center font-bold text-xs">
-              {user.substring(0,2)}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium text-gray-900 truncate">{user}</p>
-              <p className="text-xs text-gray-500">Logged In</p>
-            </div>
+      {/* Sidebar */}
+      <aside className="w-64 bg-osmak-green shadow-xl z-50 flex flex-col fixed md:sticky top-0 h-screen transition-transform duration-300 transform -translate-x-full md:translate-x-0">
+        <SidebarHeader onClose={() => {}} />
+        
+        <div className="p-6 flex flex-col gap-6 flex-1 overflow-y-auto">
+          <div className="bg-green-800/50 rounded-lg p-4 border border-green-700/50">
+             <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white font-bold">
+                   {user.charAt(0)}
+                </div>
+                <div>
+                   <p className="text-green-100 text-xs uppercase tracking-wider font-semibold">Logged in as</p>
+                   <p className="text-white font-bold text-sm leading-tight">{isAdmin ? 'Quality Assurance' : user}</p>
+                   {isAdmin && <span className="text-[10px] bg-yellow-400 text-yellow-900 px-1.5 rounded font-bold mt-1 inline-block">AUDITOR</span>}
+                </div>
+             </div>
           </div>
-          <button onClick={() => setUser(null)} className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition">
-            <LogOut size={18} /> Sign Out
-          </button>
+
+          <nav className="space-y-1">
+             <button onClick={() => setCurrentView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'dashboard' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
+                <LayoutDashboard size={20}/> Dashboard
+             </button>
+             {isAdmin && (
+                <button onClick={() => setCurrentView('pending_tasks')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'pending_tasks' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
+                   <ClipboardList size={20}/> Pending Tasks
+                </button>
+             )}
+             
+             {/* Unified R&O List Menu Item */}
+             <button onClick={() => setCurrentView('ro_list')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'ro_list' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
+                <ListFilter size={20}/> R&O List
+             </button>
+
+             <button onClick={() => setCurrentView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'analysis' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
+                <BarChart3 size={20}/> Data Analysis
+             </button>
+          </nav>
+
+          <div className="mt-auto space-y-3">
+             {!isAdmin && (
+               <button onClick={() => setShowWizard(true)} className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95">
+                  <PlusCircle size={20}/> New Entry
+               </button>
+             )}
+             <button onClick={handleLogout} className="w-full border border-green-400 text-green-100 hover:bg-green-700 font-medium py-3 rounded-lg transition flex items-center justify-center gap-2">
+                <LogOut size={18}/> Logout
+             </button>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-64 p-8">
-        {loading ? (
-           <div className="flex items-center justify-center h-full text-gray-500"><Loader2 className="animate-spin mr-2"/> Syncing...</div>
-        ) : isQA ? (
-          view === 'RECENT_ACTIVITY' ? (
-             <RecentActivity entries={entries} onItemClick={setSelectedItem} />
-          ) : qaSelectedSection ? (
-            // QA Viewing a specific section (Read Only with Closed Registries)
-            <SectionView 
-              sectionName={qaSelectedSection}
-              entries={entries.filter(e => e.section === qaSelectedSection)}
-              onNewEntry={() => {}} 
-              onItemClick={setSelectedItem}
-              readOnly={true}
-              mode="OVERVIEW"
-            />
-          ) : (
-            // QA Main Dashboard
-            <QADashboard entries={entries} onItemClick={setSelectedItem} />
-          )
-        ) : (
-          // Regular User Logic
-          <SectionView 
-            sectionName={user}
-            entries={entries.filter(e => e.section === user)}
-            onNewEntry={() => setView('WIZARD')} 
-            onItemClick={setSelectedItem}
-            mode={view === 'RISKS' ? 'RISKS' : view === 'OPPORTUNITIES' ? 'OPPORTUNITIES' : 'OVERVIEW'}
-          />
-        )}
+      <main className="flex-1 flex flex-col min-w-0">
+         <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 shadow-sm">
+            <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">
+               {currentView === 'dashboard' ? 'Dashboard Overview' : 
+                currentView === 'pending_tasks' ? 'Pending Tasks' :
+                currentView === 'ro_list' ? 'Risks & Opportunities List' :
+                'Data Analysis'}
+            </h2>
+            <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-500 hidden sm:inline-block">
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+            </div>
+         </header>
+
+         <div className="p-4 md:p-8 overflow-y-auto flex-1">
+            {loading ? (
+                <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <Loader2 size={48} className="animate-spin mb-4 text-osmak-green"/>
+                    <p>Loading registry data...</p>
+                </div>
+            ) : (
+                <>
+                    {currentView === 'dashboard' && <DashboardView />}
+                    
+                    {currentView === 'pending_tasks' && (
+                        <div className="space-y-4 animate-fadeIn">
+                             <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3 text-blue-800">
+                                <Info size={24}/>
+                                <div>
+                                    <h3 className="font-bold">Pending Verification</h3>
+                                    <p className="text-sm">These items require your attention for verification or closure.</p>
+                                </div>
+                             </div>
+                             {renderTable(
+                                sortedItems, 
+                                [
+                                    { key: 'id', label: 'Ref #', render: (i: RegistryItem) => <span className="font-mono text-xs">{displayIds[i.id]}</span> },
+                                    { key: 'section', label: 'Section' },
+                                    { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="font-medium">{i.description}</span> },
+                                    { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
+                                ],
+                                setSelectedItem
+                             )}
+                        </div>
+                    )}
+
+                    {currentView === 'ro_list' && <ROListView />}
+
+                    {currentView === 'analysis' && (
+                        <div className="animate-fadeIn text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                            <BarChart3 size={64} className="mx-auto text-gray-300 mb-4"/>
+                            <h3 className="text-xl font-bold text-gray-400">Data Analysis Module</h3>
+                            <p className="text-gray-500">Charts and reporting features will be displayed here.</p>
+                        </div>
+                    )}
+                </>
+            )}
+         </div>
       </main>
 
-      {/* Wizard Modal */}
-      {view === 'WIZARD' && (
-        <Wizard 
-          section={user} 
-          onCancel={() => setView('DASHBOARD')} 
-          onSubmit={handleSubmitEntry} 
+      {/* Modals */}
+      {selectedItem && (
+        <ItemDetailModal 
+          item={selectedItem} 
+          isQA={isAdmin} 
+          currentUser={user}
+          displayId={displayIds[selectedItem.id]}
+          onClose={() => setSelectedItem(null)} 
+          onUpdate={(updated) => { handleUpdate(updated); setSelectedItem(updated); }}
+          onDelete={handleDelete}
         />
       )}
 
-      {/* Detail Management Modal */}
-      {selectedItem && (
-        <ItemDetailModal 
-          item={selectedItem}
-          isQA={isQA}
-          onClose={() => setSelectedItem(null)}
-          onUpdate={handleUpdateItem}
+      {showWizard && (
+        <Wizard 
+          section={user!} 
+          onClose={() => setShowWizard(false)} 
+          onSubmit={handleCreate} 
         />
       )}
+
+      {auditTrailItem && (
+         <AuditTrailModal 
+            trail={auditTrailItem.auditTrail} 
+            itemId={displayIds[auditTrailItem.id]} 
+            onClose={() => setAuditTrailItem(null)}
+         />
+      )}
+    </div>
+  );
+}
+
+// --- Simplified Wizard Component (No Plan Review Step) ---
+const Wizard = ({ section, onClose, onSubmit }: { section: string, onClose: () => void, onSubmit: (item: RegistryItem) => void }) => {
+  const [step, setStep] = useState(1);
+  const [data, setData] = useState<Partial<RegistryItem>>({
+    id: `R-${Date.now()}`, // Temporary ID, simplified in list view
+    section,
+    type: 'RISK',
+    dateIdentified: new Date().toISOString().split('T')[0],
+    actionPlans: []
+  });
+
+  const updateData = (updates: Partial<RegistryItem>) => setData({ ...data, ...updates });
+
+  const nextStep = () => setStep(step + 1);
+  const prevStep = () => setStep(step - 1);
+
+  // Validate Step 1
+  const step1Valid = data.process && data.source && data.description && data.dateIdentified;
+  
+  // Validate Step 2 (Scoring)
+  const step2Valid = data.type === 'RISK' 
+     ? (data.likelihood && data.severity && data.impactQMS && data.existingControls) 
+     : (data.expectedBenefit && data.feasibility);
+
+  // Validate Step 3 (Action Plan MANDATORY)
+  const isMandatoryAction = true; // Now mandatory for all
+  const step3Valid = !isMandatoryAction || (data.actionPlans && data.actionPlans.length > 0);
+
+  // Risk Calc for Wizard
+  const riskRating = (data.likelihood || 0) * (data.severity || 0);
+  const riskLevel = calculateRiskLevel(data.likelihood || 0, data.severity || 0);
+
+  const [currentPlan, setCurrentPlan] = useState<Partial<ActionPlan>>({
+    strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: ''
+  });
+
+  const addActionPlan = () => {
+    if (!currentPlan.description || !currentPlan.strategy) return;
+    const newPlan: ActionPlan = {
+      id: `AP-${Date.now()}`,
+      strategy: currentPlan.strategy!,
+      description: currentPlan.description!,
+      evidence: currentPlan.evidence!,
+      responsiblePerson: currentPlan.responsiblePerson!,
+      targetDate: currentPlan.targetDate!,
+      status: 'APPROVED' // Auto-approved
+    };
+    updateData({ actionPlans: [...(data.actionPlans || []), newPlan] });
+    setCurrentPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
+  };
+
+  const removePlan = (id: string) => {
+      updateData({ actionPlans: data.actionPlans?.filter(p => p.id !== id) });
+  };
+
+  const strategies = data.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-fadeIn overflow-hidden">
+        {/* Wizard Header */}
+        <div className="bg-osmak-green p-6 text-white flex justify-between items-center">
+          <div>
+             <h2 className="text-2xl font-bold">New Registry Entry</h2>
+             <p className="text-green-100 text-sm">Step {step} of 3: {step === 1 ? 'Context & Identification' : step === 2 ? 'Assessment & Scoring' : 'Action Planning'}</p>
+          </div>
+          <button onClick={onClose}><XCircle size={32} className="hover:text-green-200 transition"/></button>
+        </div>
+
+        {/* Wizard Body */}
+        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+           {step === 1 && (
+             <div className="space-y-6 animate-fadeIn">
+                <div className="grid grid-cols-2 gap-6">
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Process / Function</label>
+                        <input type="text" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" placeholder="e.g. Patient Admission" value={data.process} onChange={e => updateData({ process: e.target.value })} />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Date Identified</label>
+                        <input type="date" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" value={data.dateIdentified} onChange={e => updateData({ dateIdentified: e.target.value })} />
+                    </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Source</label>
+                    <select className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" value={SOURCES.includes(data.source || '') ? data.source : 'Others'} onChange={e => updateData({ source: e.target.value === 'Others' ? '' : e.target.value })}>
+                        {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {(!SOURCES.includes(data.source || '') || data.source === '') && (
+                        <input type="text" className="w-full border p-3 rounded-lg mt-2 focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" placeholder="Specify Source..." value={data.source} onChange={e => updateData({ source: e.target.value })} />
+                    )}
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-1">Entry Type</label>
+                   <div className="flex gap-4">
+                      <button onClick={() => updateData({ type: 'RISK' })} className={`flex-1 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition ${data.type === 'RISK' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 hover:border-red-200'}`}>
+                         <AlertTriangle size={32}/>
+                         <span className="font-bold">RISK</span>
+                      </button>
+                      <button onClick={() => updateData({ type: 'OPPORTUNITY' })} className={`flex-1 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition ${data.type === 'OPPORTUNITY' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-green-200'}`}>
+                         <Lightbulb size={32}/>
+                         <span className="font-bold">OPPORTUNITY</span>
+                      </button>
+                   </div>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">Description</label>
+                    <textarea className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 h-24 bg-white text-gray-900 border-gray-300" placeholder={`Describe the ${data.type?.toLowerCase()}...`} value={data.description} onChange={e => updateData({ description: e.target.value })}></textarea>
+                </div>
+             </div>
+           )}
+
+           {step === 2 && (
+             <div className="space-y-6 animate-fadeIn">
+                {data.type === 'RISK' ? (
+                   <>
+                     <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-center justify-between">
+                        <div>
+                            <span className="text-red-800 text-xs font-bold uppercase">Calculated Risk Level</span>
+                            <h3 className={`text-3xl font-bold ${riskLevel === 'CRITICAL' ? 'text-red-700' : riskLevel === 'HIGH' ? 'text-orange-600' : 'text-yellow-700'}`}>{riskLevel} ({riskRating})</h3>
+                        </div>
+                        <AlertTriangle size={48} className="text-red-200"/>
+                     </div>
+                     <div className="grid grid-cols-2 gap-8">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Likelihood (1-5)</label>
+                            <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600" value={data.likelihood || 1} onChange={e => updateData({ likelihood: parseInt(e.target.value) })} />
+                            <div className="flex justify-between text-xs text-gray-400 mt-2">
+                               <span>1: Rare</span><span>5: Almost Certain</span>
+                            </div>
+                            <p className="text-sm font-medium text-red-600 mt-1">{LIKELIHOOD_DESC[data.likelihood || 1]}</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">Severity (1-5)</label>
+                            <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600" value={data.severity || 1} onChange={e => updateData({ severity: parseInt(e.target.value) })} />
+                            <div className="flex justify-between text-xs text-gray-400 mt-2">
+                               <span>1: Insignificant</span><span>5: Critical</span>
+                            </div>
+                            <p className="text-sm font-medium text-red-600 mt-1">{SEVERITY_DESC[data.severity || 1]}</p>
+                        </div>
+                     </div>
+                     <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Potential Impact on QMS</label>
+                        <textarea className="w-full border p-3 rounded-lg bg-white text-gray-900 border-gray-300" value={data.impactQMS} onChange={e => updateData({ impactQMS: e.target.value })}></textarea>
+                     </div>
+                     <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Existing Controls</label>
+                        <textarea className="w-full border p-3 rounded-lg bg-white text-gray-900 border-gray-300" value={data.existingControls} onChange={e => updateData({ existingControls: e.target.value })}></textarea>
+                     </div>
+                     <div className="bg-yellow-50 p-3 rounded border border-yellow-200 text-sm text-yellow-800 flex gap-2">
+                         <Info size={16} className="shrink-0 mt-0.5"/>
+                         <p><strong>Mandatory Action Strategy:</strong> All risks require an action plan.</p>
+                     </div>
+                   </>
+                ) : (
+                   <>
+                     <div className="grid grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Expected Benefit</label>
+                            <textarea className="w-full border p-3 rounded-lg h-32 bg-white text-gray-900 border-gray-300" value={data.expectedBenefit} onChange={e => updateData({ expectedBenefit: e.target.value })}></textarea>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">Feasibility</label>
+                            <select className="w-full border p-3 rounded-lg bg-white text-gray-900 border-gray-300" value={data.feasibility} onChange={e => updateData({ feasibility: e.target.value as any })}>
+                                <option value="LOW">Low</option>
+                                <option value="MEDIUM">Medium</option>
+                                <option value="HIGH">High</option>
+                            </select>
+                        </div>
+                     </div>
+                   </>
+                )}
+             </div>
+           )}
+
+           {step === 3 && (
+             <div className="space-y-6 animate-fadeIn">
+                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                   <h3 className="text-blue-900 font-bold mb-1">Action Planning</h3>
+                   <p className="text-blue-800 text-sm mb-4">Define how you will address this {data.type?.toLowerCase()}. At least one action plan is mandatory.</p>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <select className="p-2 border rounded bg-white text-gray-900 border-gray-300" value={currentPlan.strategy} onChange={e => setCurrentPlan({...currentPlan, strategy: e.target.value})}>
+                          <option value="">Select Strategy</option>
+                          {Object.keys(strategies).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <input type="text" className="p-2 border rounded bg-white text-gray-900 border-gray-300" placeholder="Action Description" value={currentPlan.description} onChange={e => setCurrentPlan({...currentPlan, description: e.target.value})} />
+                      <input type="text" className="p-2 border rounded bg-white text-gray-900 border-gray-300" placeholder="Verification Evidence (e.g. Logs)" value={currentPlan.evidence} onChange={e => setCurrentPlan({...currentPlan, evidence: e.target.value})} />
+                      <div className="flex gap-2">
+                        <input type="text" className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300" placeholder="Responsible" value={currentPlan.responsiblePerson} onChange={e => setCurrentPlan({...currentPlan, responsiblePerson: e.target.value})} />
+                        <input type="date" className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300" value={currentPlan.targetDate} onChange={e => setCurrentPlan({...currentPlan, targetDate: e.target.value})} />
+                      </div>
+                   </div>
+                   <button onClick={addActionPlan} disabled={!currentPlan.description || !currentPlan.strategy} className="w-full bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 disabled:opacity-50">
+                      Add Action Plan
+                   </button>
+                </div>
+
+                <div className="space-y-2">
+                    <h4 className="font-bold text-gray-700 text-sm uppercase">Added Plans ({data.actionPlans?.length})</h4>
+                    {data.actionPlans?.length === 0 && <p className="text-gray-400 italic text-sm">No plans added yet.</p>}
+                    {data.actionPlans?.map(p => (
+                        <div key={p.id} className="bg-white border p-3 rounded-lg flex justify-between items-start shadow-sm">
+                            <div>
+                                <span className="text-xs font-bold bg-gray-200 px-2 py-0.5 rounded text-gray-700 uppercase mr-2">{p.strategy}</span>
+                                <span className="font-medium text-gray-800">{p.description}</span>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    By: {p.responsiblePerson} • Due: {p.targetDate}
+                                </div>
+                            </div>
+                            <button onClick={() => removePlan(p.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                        </div>
+                    ))}
+                </div>
+             </div>
+           )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 bg-gray-50 border-t flex justify-between items-center">
+            {step > 1 ? (
+                <button onClick={prevStep} className="px-6 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 font-bold">Back</button>
+            ) : (
+                <div></div>
+            )}
+            
+            {step < 3 ? (
+                <button onClick={nextStep} disabled={step === 1 ? !step1Valid : !step2Valid} className="px-8 py-3 bg-osmak-green text-white rounded-lg font-bold shadow hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Next Step
+                </button>
+            ) : (
+                <button onClick={() => {
+                    const finalItem = { 
+                        ...data, 
+                        status: 'IMPLEMENTATION' as WorkflowStatus,
+                        riskRating: (data.likelihood || 0) * (data.severity || 0),
+                        riskLevel: calculateRiskLevel(data.likelihood || 0, data.severity || 0)
+                    } as RegistryItem;
+                    onSubmit(finalItem);
+                }} disabled={!step3Valid} className="px-8 py-3 bg-osmak-green text-white rounded-lg font-bold shadow hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                    <Save size={20}/> Submit Entry
+                </button>
+            )}
+        </div>
+      </div>
     </div>
   );
 };

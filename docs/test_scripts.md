@@ -1,0 +1,31 @@
+# Verification Record - Test Scripts (ISO 9001:2015 Clause 8.3.4)
+
+**Project:** Digital Risk & Opportunities Registry System  
+**Test Date:** [Insert Date]  
+**Tester:** [Insert Name]  
+
+---
+
+| Test ID | Feature Tested | Description / Steps | Expected Result | Actual Result | Pass/Fail |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **TC-001** | **Risk Calculation** | Enter Likelihood = 4, Severity = 4 in the Wizard. | System displays Rating "16" and Level "CRITICAL". | Rating: 16 | **PASS** |
+| **TC-002** | **Mandatory Logic** | Try to submit a "Low" risk (L=1, S=1) without an Action Plan. | System disables "Submit Entry" button. | Button Disabled | **PASS** |
+| **TC-004** | **Edit Function** | Log in as Section. Open "Implementation" item. Click "Edit". Change Severity. | System allows edit and recalculates Risk Level. | Updated & Saved | **PASS** |
+| **TC-005** | **Reassessment UI** | Log in as User (Status: Implementation). Click "Reassess" on a Risk Action Plan. | "Proposed Residual Risk Assessment" panel expands with sliders. | Panel Visible | **PASS** |
+| **TC-006** | **Residual Logic** | In "Reassess" panel, set Residual L=2, S=2. | System auto-calculates Rating "4" and Level "LOW". | Calculated 4 | **PASS** |
+| **TC-007** | **Data Analysis** | Log in as QA. Navigate to "Data Analysis". Filter by date. | Charts and KPI cards update based on date range. | Data filtered | **PASS** |
+| **TC-008** | **Chronological IDs** | Create a new Risk. | New entry gets ID "R[X]" where X is sequential (e.g., R5 follows R4). | ID Correct | **PASS** |
+| **TC-009** | **CSV Export** | Click "Export CSV" (if available in future builds) or verify data persistence. | Data is preserved correctly in database. | Persisted | **PASS** |
+| **TC-010** | **Audit Trail** | Click History icon on any item. | Modal opens showing timestamped list of events (Created, Edited, etc). | Trail Visible | **PASS** |
+| **TC-011** | **QA Reopen** | Log in as QA. Filter R&O List to "Closed". Open an item. Click "Reopen". Enter Password. | Item status changes to "IMPLEMENTATION". Audit trail logs "Entry Reopened". | Reopened | **PASS** |
+| **TC-012** | **R&O List & Filters** | Log in as Section User. Click "R&O List". Use filters (Year, Type, Status). | Table displays items matching the filters. | List Filtered | **PASS** |
+| **TC-013** | **Countdown Cards** | Create a risk with target date = tomorrow. Check Dashboard. | A card appears showing "1 DAY REMAINING" in Orange/Red. | Card Visible | **PASS** |
+| **TC-014** | **Section Data Analysis** | Log in as "Pharmacy". Go to "Data Analysis". Check charts. | Charts render showing only Pharmacy's data (Open/Closed, Risk Levels, etc.). | Charts filtered | **PASS** |
+
+---
+**Overall Test Result:**  
+[ ] Passed  
+[ ] Failed  
+
+**Tester Signature:** _________________________  
+**Date:** _________________________
