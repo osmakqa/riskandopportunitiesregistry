@@ -25,7 +25,7 @@ To transition from decentralized spreadsheet-based risk assessments to a central
 *   **Activity:** Frontend development using ReactJS and TailwindCSS (OsMak Branding).
 *   **Activity:** Implementation of "Edit Mode," a comprehensive **Audit Trail**, and **Data Analysis** dashboards for both QA (global) and Section (local) users.
 *   **Activity:** Implementation of **Chronological Reference IDs** and **Residual Risk Reassessment** workflow.
-*   **Optimization:** Removal of "Plan Review" step (v2.2) and consolidation of menus into a unified "R&O List" (v2.3) with scrollable tables for better UX.
+*   **Optimization:** Removal of "Plan Review" step to streamline workflow (v2.2).
 *   **Backend:** Integration with Supabase for real-time data storage, sorting, and audit logging.
 
 ### Phase 4: Verification (Testing)

@@ -18,12 +18,21 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
 ### **Login Credentials**
 *   **Section Users** (e.g., ER, Pharmacy, Nursing):
     *   **Password**: `osmak123`
-*   **Quality Assurance Auditor**:
+*   **QA Command Center**:
     *   **Password**: `admin123`
 
+### **User Support & Resources**
+Directly from the **Login Screen**, you can access the following resources:
+*   **View System Workflow**: A visual guide to the 4-step registry process.
+*   **Download User Manual**: A direct link to download this PDF guide.
+*   **Watch Orientation Video**: A video tutorial covering system basics and best practices.
+
 ### **Navigation Sidebar**
-*   **Dashboard**: High-level statistics, upcoming deadlines, and scrollable tables for Open Risks/Opportunities.
-*   **R&O List**: A master list of all entries (Risks & Opportunities), sortable and filterable by Year, Status, and Type.
+*   **Dashboard**: High-level statistics and upcoming deadlines.
+*   **Registries**:
+    *   **R&O List**: A combined chronological list of all Risks and Opportunities.
+    *   **Risks**: View Open and Closed Risk tables.
+    *   **Opportunities**: View Open and Closed Opportunity tables.
 *   **Data Analysis**: Charts and performance metrics for your role.
 
 ---
@@ -35,23 +44,22 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
     *   **Red**: Overdue (Immediate action required).
     *   **Orange**: Due within 7 days.
     *   **Green**: Due in more than 7 days.
-*   **Open Registries**: Below the countdowns, you will find your section's **Open Risks** and **Open Opportunities** tables. These tables are scrollable to save space.
+*   **Open Registries**: Below the countdowns, you will find your section's **Open Risks** and **Open Opportunities** tables stacked for easy review.
 
 ### **B. Creating a New Entry**
 1.  Click the **"+ New Entry"** button on the top right.
 2.  Follow the 4-step wizard to input all required details.
-3.  **Action Plans** are **MANDATORY** for **ALL** Risks (regardless of rating) and all Opportunities. You cannot submit an entry without at least one action plan.
+3.  **Action Plans** are now **MANDATORY** for **ALL** Risks (regardless of rating) and all Opportunities. You cannot submit an entry without at least one action plan.
 4.  Upon submission, the entry immediately enters the **Implementation** phase.
 
 ### **C. Viewing and Sorting Lists**
-*   Navigate to the **R&O List** menu item.
-*   This view contains all your records (both Open and Closed).
-*   **Filtering**: Use the dropdowns at the top to filter by **Year**, **Type** (Risk/Opportunity), or **Status** (Open/Closed).
-*   **Sorting**: Click on the **Ref #** column header to sort chronologically (e.g., R1, R2, O1).
+*   Navigate to the **Risks** or **Opportunities** menu to see both Open and Closed tables.
+*   Use the **R&O List** to see a combined view sorted chronologically by Reference ID (e.g., R1, R2, O1).
+*   Click on table headers like **"Date ID"**, **"Status"**, or **"Level"** to sort the list.
 
 ### **D. Editing an Entry**
 *   You can edit an entry while in the `IMPLEMENTATION` phase.
-*   Open the entry from the dashboard or list.
+*   Open the entry from the list.
 *   Click the **Pencil Icon** (Edit) in the top-right corner.
 *   Modify details (including re-scoring risks) and click the **Save Icon**.
 
@@ -88,7 +96,7 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
 
 ---
 
-## **4. Guide for Quality Assurance Auditor**
+## **4. Guide for QA Command Center**
 
 ### **A. Reviewing & Verifying Items**
 *   Use the **"Pending Tasks"** menu to see all items requiring your attention across the hospital.
@@ -96,10 +104,10 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
 *   **Closure**: Review the user's proposed **Residual Risk Assessment** and close the entry.
 
 ### **B. Viewing Closed Registries**
-1.  Navigate to **"R&O List"** from the sidebar.
-2.  Use the **Status Filter** dropdown and select **"Closed"**.
-3.  The table will display all closed records. You can further filter by **Year** or **Type**.
-4.  Click on any item to view its full details, including the closure remarks.
+1.  Navigate to **"Closed Risks"** or **"Closed Opportunities"** from the sidebar.
+2.  **Important**: The list will be empty by default to improve performance.
+3.  Use the **"Filter by Section"** dropdown to select a specific department or "All Sections". The table will populate.
+4.  You can export the currently displayed list to a detailed CSV.
 
 ### **C. Reopening a Closed Entry**
 *   This function is **exclusive to QA** and is used for correction of records or reactivating recurring risks.

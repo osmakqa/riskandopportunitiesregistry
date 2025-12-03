@@ -42,7 +42,8 @@ import {
   Save,
   BarChart3,
   Filter,
-  X
+  X,
+  Video
 } from 'lucide-react';
 
 // --- Supabase Configuration ---
@@ -156,7 +157,7 @@ const mapToDb = (item: RegistryItem) => ({
 const mapFromDb = (dbItem: any): RegistryItem => ({
   id: dbItem.id,
   section: dbItem.section,
-  dateIdentified: dbItem.date_identified || '', // Default to empty string to prevent null split error
+  dateIdentified: dbItem.date_identified || '',
   process: dbItem.process || '',
   source: dbItem.source || '',
   description: dbItem.description || '',
@@ -206,7 +207,7 @@ const SECTIONS = [
   'Requisition Section',
   'Supply Management Section',
   'Surgical Care Complex'
-].sort();
+];
 
 // --- MOCK CREDENTIALS STORE ---
 const CREDENTIALS: Record<string, string> = {
@@ -390,7 +391,7 @@ const SidebarHeader = ({ onClose }: { onClose: () => void }) => (
             className="h-10 w-auto object-contain"
         />
         <div className="flex flex-col">
-            <h1 className="text-white text-sm font-extrabold tracking-wide uppercase leading-none">OSPITAL NG MAKATI</h1>
+            <h1 className="text-white text-xs font-extrabold tracking-wide uppercase leading-none">OSPITAL NG MAKATI</h1>
             <span className="text-green-50 text-[0.65rem] font-medium opacity-90 tracking-wider mt-0.5">Risk & Opportunities Registry</span>
         </div>
         </div>
@@ -600,40 +601,35 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
               onChange={(e) => { setPassword(e.target.value); setError(''); }}
             />
             {error && <p className="text-red-500 text-xs mt-2 font-medium">{error}</p>}
-            <p className="text-gray-400 text-xs mt-2 italic">
-               Hint: Use <strong>{isAdmin ? 'admin123' : 'osmak123'}</strong>
-            </p>
+
           </div>
           <div className="space-y-4">
             <button type="submit" className="w-full bg-osmak-green hover:bg-osmak-green-dark text-white font-semibold py-3 rounded-lg transition shadow-md">
               Login
             </button>
-            
-            <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
+            <div className="space-y-3 mt-4">
                 <button 
                   type="button" 
                   onClick={() => setShowWorkflow(true)}
-                  className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2 py-1"
+                  className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2"
                 >
                   <BookOpen size={16} /> View System Workflow
                 </button>
-                
                 <a 
                   href="https://drive.google.com/file/d/1obDtzRxsTOpUMF0_pjScmyx-njpW_JAB/view?usp=sharing" 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="w-full text-blue-600 text-sm font-medium hover:underline flex items-center justify-center gap-2 py-1"
+                  className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2"
                 >
-                   <FileText size={16} /> Download User Manual
+                  <FileText size={16} /> Download User Manual
                 </a>
-
-                <a 
-                   href="https://drive.google.com/file/d/1m3TXXwC7nV7lp2JNLgB9cxAbXsosaOLA/view?usp=sharing"
-                   target="_blank" 
-                   rel="noopener noreferrer"
-                   className="w-full text-purple-600 text-sm font-medium hover:underline flex items-center justify-center gap-2 py-1"
+                 <a 
+                  href="https://drive.google.com/file/d/1m3TXXwC7nV7lp2JNLgB9cxAbXsosaOLA/view?usp=sharing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2"
                 >
-                   <Eye size={16} /> Watch Orientation
+                  <Video size={16} /> Watch Orientation Video
                 </a>
             </div>
           </div>
@@ -1272,904 +1268,1860 @@ const ItemDetailModal = ({
                    />
                    <input 
                      type="text" 
-                     placeholder="Verification / Evidence (e.g. Photo, Logbook)"
+                     placeholder="Verification / Evidence (e.g. Photo log, Certificate)"
                      className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                      value={newPlan.evidence}
                      onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
                    />
-                   <div className="flex gap-4">
+                   <div className="grid grid-cols-2 gap-3">
                      <input 
                        type="text" 
                        placeholder="Responsible Person"
-                       className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.responsiblePerson}
                        onChange={e => setNewPlan({...newPlan, responsiblePerson: e.target.value})}
                      />
                      <input 
                        type="date" 
-                       className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                        value={newPlan.targetDate}
                        onChange={e => setNewPlan({...newPlan, targetDate: e.target.value})}
                      />
                    </div>
-                   <div className="flex justify-end gap-2">
-                     <button 
-                       onClick={() => setIsAddingPlan(false)} 
-                       className="px-4 py-2 text-gray-600 bg-gray-200 rounded hover:bg-gray-300"
-                     >
-                       Cancel
-                     </button>
-                     <button 
-                       onClick={handleAddPlanInModal} 
-                       className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
-                       disabled={!newPlan.description || !newPlan.strategy}
-                     >
-                       Save Plan
-                     </button>
+                   <div className="flex gap-2">
+                    <button 
+                      onClick={handleAddPlanInModal}
+                      className="flex-1 bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700"
+                    >
+                      Add Plan
+                    </button>
+                    <button 
+                      onClick={() => setIsAddingPlan(false)}
+                      className="px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
                    </div>
                  </div>
               </div>
             )}
           </div>
 
-          {/* QA Verification & Closure Section */}
-          {(item.status === 'REASSESSMENT' || item.status === 'QA_VERIFICATION' || item.status === 'CLOSED') && (
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
-              <h3 className="font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
-                 <ShieldAlert size={18} /> QA Verification & Closure
-              </h3>
+          <div className="mt-8 border-t pt-6 flex gap-4">
+              {item.status === 'CLOSED' && isQA && !showReopenConfirm && !showDeleteConfirm && (
+                <button 
+                    onClick={() => setShowReopenConfirm(true)}
+                    className="text-blue-500 text-sm hover:underline hover:text-blue-700 flex items-center gap-2"
+                >
+                    <RotateCcw size={14}/> Reopen Entry
+                </button>
+              )}
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="space-y-4">
-                    <div>
-                        <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Residual Risk Rating (User Proposed)</span>
-                        <div className="flex items-center gap-4">
-                            <div className="text-2xl font-bold text-gray-800">{item.residualRiskRating || 'N/A'}</div>
-                            {item.residualRiskLevel && (
-                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${getRiskColor(item.residualRiskLevel)}`}>
-                                    {item.residualRiskLevel}
-                                </span>
-                            )}
+              {!showDeleteConfirm && !showReopenConfirm && (
+                  <button 
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-red-500 text-sm hover:underline hover:text-red-700 flex items-center gap-2"
+                  >
+                      <Trash2 size={14}/> Delete Entry
+                  </button>
+              )}
+
+              {showDeleteConfirm && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 animate-fadeIn w-full">
+                      <h4 className="text-red-800 font-bold text-sm mb-2">Confirm Deletion</h4>
+                      <p className="text-red-600 text-xs mb-3">This action cannot be undone. Please enter your password to confirm.</p>
+                      <div className="flex gap-2 items-center">
+                          <input 
+                              type="password"
+                              className="border border-red-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-red-500"
+                              placeholder="Password"
+                              value={deletePassword}
+                              onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                          />
+                          <button onClick={confirmDelete} className="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-red-700">Confirm</button>
+                          <button onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }} className="text-gray-500 text-sm hover:text-gray-700 px-2">Cancel</button>
+                      </div>
+                      {deleteError && <p className="text-red-600 text-xs font-bold mt-2">{deleteError}</p>}
+                  </div>
+              )}
+
+              {showReopenConfirm && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-fadeIn w-full">
+                      <h4 className="text-blue-800 font-bold text-sm mb-2">Confirm Reopen</h4>
+                      <p className="text-blue-600 text-xs mb-3">This will move the entry back to "Implementation". Please enter your password to confirm.</p>
+                      <div className="flex gap-2 items-center">
+                          <input 
+                              type="password"
+                              className="border border-blue-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Password"
+                              value={reopenPassword}
+                              onChange={e => { setReopenPassword(e.target.value); setReopenError(''); }}
+                          />
+                          <button onClick={confirmReopen} className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-blue-700">Confirm Reopen</button>
+                          <button onClick={() => { setShowReopenConfirm(false); setReopenPassword(''); }} className="text-gray-500 text-sm hover:text-gray-700 px-2">Cancel</button>
+                      </div>
+                      {reopenError && <p className="text-red-600 text-xs font-bold mt-2">{reopenError}</p>}
+                  </div>
+              )}
+          </div>
+        
+            {/* --- RESIDUAL RISK REASSESSMENT BLOCK --- */}
+            {item.status === 'REASSESSMENT' && item.type === 'RISK' && !isQA && (
+              <div className="space-y-6 animate-fadeIn bg-white p-6 rounded-xl border border-amber-200 shadow-sm mt-4">
+                <div className="flex items-center gap-2 border-b border-amber-100 pb-3">
+                    <div className="bg-amber-100 p-2 rounded-lg text-amber-600"><Activity size={20}/></div>
+                    <h3 className="font-bold text-lg text-gray-800">Residual Risk Reassessment</h3>
+                </div>
+                <p className="text-sm text-gray-600">
+                    Now that action plans are verified, please re-evaluate the risk to determine the <strong>Residual Risk</strong>.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Residual Likelihood (1-5)</label>
+                            <div className="flex items-center gap-4">
+                                <input 
+                                    type="range" min="1" max="5" 
+                                    value={reassessment.likelihood} 
+                                    onChange={(e) => setReassessment({...reassessment, likelihood: parseInt(e.target.value)})}
+                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                />
+                                <span className="font-bold text-lg text-gray-700 w-8 text-center">{reassessment.likelihood}</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[reassessment.likelihood]}</div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Residual Severity (1-5)</label>
+                            <div className="flex items-center gap-4">
+                                <input 
+                                    type="range" min="1" max="5" 
+                                    value={reassessment.severity} 
+                                    onChange={(e) => setReassessment({...reassessment, severity: parseInt(e.target.value)})}
+                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                />
+                                <span className="font-bold text-lg text-gray-700 w-8 text-center">{reassessment.severity}</span>
+                            </div>
+                             <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[reassessment.severity]}</div>
                         </div>
                     </div>
-                    <div>
-                        <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Effectiveness / Completion Remarks</span>
-                        {isQA && item.status !== 'CLOSED' ? (
-                            <textarea 
-                                className="w-full p-2 border rounded bg-white text-gray-900" 
-                                value={reassessment.remarks}
-                                onChange={e => setReassessment({...reassessment, remarks: e.target.value})}
-                                placeholder="Enter QA remarks here..."
-                            />
-                        ) : (
-                            <p className="p-3 bg-white border rounded text-gray-800 text-sm">{item.effectivenessRemarks || 'No remarks.'}</p>
-                        )}
+
+                    {/* Calculated Result Display */}
+                    <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center border border-gray-200">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Calculated Residual Risk</span>
+                        <div className="text-5xl font-bold text-gray-800 mb-2">{reassessmentRiskRating}</div>
+                        <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wide ${getLevelPillColor(reassessmentRiskLevel)}`}>
+                          {reassessmentRiskLevel}
+                        </span>
                     </div>
-                 </div>
-                 
-                 {isQA && item.status !== 'CLOSED' && (
-                    <div className="flex flex-col justify-end gap-3">
-                        <div className="text-sm text-gray-600 italic bg-blue-50 p-3 rounded">
-                            Review the evidence in the Action Plans above. If satisfied, verify and close.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Completion / Effectiveness Remarks</label>
+                  <textarea 
+                    className="w-full border rounded-lg p-3 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-amber-500 outline-none" 
+                    rows={3}
+                    placeholder="Describe why the risk level has changed (or why it hasn't)..."
+                    value={reassessment.remarks} 
+                    onChange={e => setReassessment({...reassessment, remarks: e.target.value})} 
+                  />
+                </div>
+                
+                <button 
+                    onClick={handleSubmitReassessment} 
+                    disabled={!reassessment.remarks}
+                    className="w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Submit for QA Verification
+                </button>
+              </div>
+            )}
+
+            {/* --- QA Verification & Closure Block --- */}
+            {item.status === 'QA_VERIFICATION' && isQA && (
+              <div className="space-y-4 bg-indigo-50 p-6 rounded-xl border border-indigo-100 mt-4">
+                 {item.type === 'RISK' ? (
+                   <>
+                    <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
+                        <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><CheckCircle2 size={18}/> Reassessment Data Submitted</h4>
+                        <div className="grid grid-cols-2 gap-4 text-sm mt-2">
+                            <div>
+                                <span className="block text-xs text-gray-500 uppercase">Residual Rating</span>
+                                <span className="font-bold text-gray-800 text-lg">{item.residualRiskRating} ({item.residualRiskLevel})</span>
+                            </div>
+                            <div>
+                                <span className="block text-xs text-gray-500 uppercase">Input</span>
+                                <span className="text-gray-600">Likelihood: {item.residualLikelihood} × Severity: {item.residualSeverity}</span>
+                            </div>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={handleFinalClose} className="flex-1 bg-green-700 text-white font-bold py-3 rounded hover:bg-green-800 shadow-sm flex justify-center items-center gap-2">
-                                <CheckCircle2 size={18}/> Verify & Close Registry Entry
-                            </button>
-                            <button onClick={handleRejectReassessment} className="px-4 py-3 bg-red-100 text-red-700 font-bold rounded hover:bg-red-200 border border-red-200">
-                                Reject & Request Re-Eval
-                            </button>
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                            <span className="block text-xs text-gray-500 uppercase mb-1">Remarks</span>
+                            <p className="text-gray-700 italic">"{item.effectivenessRemarks}"</p>
                         </div>
+                    </div>
+                    <div className="flex gap-4 pt-2">
+                        <button onClick={handleRejectReassessment} className="flex-1 border border-red-300 text-red-700 py-3 rounded-lg font-bold hover:bg-red-50 flex items-center justify-center gap-2 transition">
+                          <RotateCcw size={16} /> Reject & Request Re-Eval
+                        </button>
+                        <button onClick={handleFinalClose} className="flex-[2] bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-md transition">
+                          Verify & Close Registry Entry
+                        </button>
+                    </div>
+                   </>
+                 ) : (
+                    <div className="space-y-4">
+                       <h4 className="font-bold text-indigo-900 border-b border-indigo-100 pb-2">Final Opportunity Review</h4>
+                       <p className="text-sm text-gray-600">All actions for this opportunity have been verified. Please add remarks and close.</p>
+                       <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">QA Remarks</label>
+                          <textarea 
+                            className="w-full border rounded-lg p-3 h-24 bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                            placeholder="Final remarks on the opportunity outcome..."
+                            value={reassessment.remarks} 
+                            onChange={e => setReassessment({...reassessment, remarks: e.target.value})} 
+                          />
+                       </div>
+                       <button onClick={handleFinalClose} className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 shadow-md transition">
+                          Close Opportunity
+                       </button>
                     </div>
                  )}
-                 {item.status === 'CLOSED' && (
-                     <div className="flex flex-col justify-end">
-                         <div className="bg-green-50 border border-green-200 p-4 rounded-lg flex items-center gap-3">
-                             <CheckCircle2 size={24} className="text-green-600"/>
+              </div>
+            )}
+
+            {item.status === 'CLOSED' && (
+              <div className="space-y-4 mt-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <p className="text-green-700 font-bold flex items-center gap-2 text-lg">
+                  <CheckCircle2 size={24} /> This entry is verified and closed.
+                </p>
+                <p className="text-sm text-gray-500 ml-8">Closed on {item.closedAt}</p>
+                
+                {item.effectivenessRemarks && (
+                   <div className="bg-white p-4 border border-gray-200 rounded-lg text-sm text-gray-600 ml-8 shadow-sm">
+                      <strong className="block text-gray-800 mb-1">Final Remarks / Effectiveness:</strong> 
+                      {item.effectivenessRemarks}
+                      {item.type === 'RISK' && item.residualRiskRating && (
+                         <div className="mt-3 pt-3 border-t border-gray-100 flex gap-4">
                              <div>
-                                 <h4 className="font-bold text-green-900">Closed by Quality Assurance</h4>
-                                 <p className="text-xs text-green-700">Date Closed: {item.closedAt}</p>
+                                 <span className="text-xs text-gray-400 uppercase">Residual Rating</span>
+                                 <div className="font-bold text-gray-800">{item.residualRiskRating}</div>
+                             </div>
+                             <div>
+                                 <span className="text-xs text-gray-400 uppercase">Residual Level</span>
+                                 <div className={`font-bold ${item.residualRiskLevel === 'CRITICAL' ? 'text-red-600' : 'text-green-600'}`}>{item.residualRiskLevel}</div>
                              </div>
                          </div>
-                     </div>
-                 )}
+                      )}
+                   </div>
+                )}
               </div>
-            </div>
-          )}
-
-          {/* Delete & Reopen Zone */}
-          <div className="pt-8 border-t flex justify-between">
-              <div>
-                  {isQA && item.status === 'CLOSED' && (
-                      <button 
-                          onClick={() => setShowReopenConfirm(true)}
-                          className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-800 px-3 py-2 rounded hover:bg-orange-50 transition"
-                      >
-                          <RotateCcw size={16}/> Reopen Entry
-                      </button>
-                  )}
-              </div>
-              <button 
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 px-3 py-2 rounded hover:bg-red-50 transition"
-              >
-                  <Trash2 size={16}/> Delete Entry
-              </button>
-          </div>
-
-          {/* Confirmation Modals */}
-          {showDeleteConfirm && (
-              <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center p-8 animate-fadeIn">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Deletion</h3>
-                  <p className="text-gray-600 mb-4 text-center">This action cannot be undone. Please enter your password to confirm.</p>
-                  <input 
-                      type="password" 
-                      className="border p-2 rounded w-64 mb-2 bg-white text-gray-900"
-                      placeholder="Password"
-                      value={deletePassword}
-                      onChange={e => setDeletePassword(e.target.value)}
-                  />
-                  {deleteError && <p className="text-red-500 text-xs mb-2">{deleteError}</p>}
-                  <div className="flex gap-2">
-                      <button onClick={confirmDelete} className="bg-red-600 text-white px-4 py-2 rounded font-bold">Confirm Delete</button>
-                      <button onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); setDeleteError(''); }} className="bg-gray-200 text-gray-800 px-4 py-2 rounded">Cancel</button>
-                  </div>
-              </div>
-          )}
-
-          {showReopenConfirm && (
-              <div className="absolute inset-0 bg-white/90 z-20 flex flex-col items-center justify-center p-8 animate-fadeIn">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm Reopen</h3>
-                  <p className="text-gray-600 mb-4 text-center">Status will revert to IMPLEMENTATION. Enter password to confirm.</p>
-                  <input 
-                      type="password" 
-                      className="border p-2 rounded w-64 mb-2 bg-white text-gray-900"
-                      placeholder="Password"
-                      value={reopenPassword}
-                      onChange={e => setReopenPassword(e.target.value)}
-                  />
-                  {reopenError && <p className="text-red-500 text-xs mb-2">{reopenError}</p>}
-                  <div className="flex gap-2">
-                      <button onClick={confirmReopen} className="bg-orange-600 text-white px-4 py-2 rounded font-bold">Confirm Reopen</button>
-                      <button onClick={() => { setShowReopenConfirm(false); setReopenPassword(''); setReopenError(''); }} className="bg-gray-200 text-gray-800 px-4 py-2 rounded">Cancel</button>
-                  </div>
-              </div>
-          )}
-
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Main App Component ---
-function App() {
-  const [user, setUser] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [items, setItems] = useState<RegistryItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  
-  // Navigation & View State
-  const [currentView, setCurrentView] = useState('dashboard');
-  const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
-  const [showWizard, setShowWizard] = useState(false);
-  const [auditTrailItem, setAuditTrailItem] = useState<RegistryItem | null>(null);
-
-  // Filters
-  const [filterYear, setFilterYear] = useState<string>('All');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
-  const [filterType, setFilterType] = useState<string>('All');
-
-  // Sorting
-  const [sortConfig, setSortConfig] = useState<{ key: keyof RegistryItem, direction: 'asc' | 'desc' } | null>(null);
-
-  useEffect(() => {
-    if (user) {
-      fetchItems();
-    }
-  }, [user]);
-
-  const fetchItems = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('registry_items').select('*');
-    if (data) {
-      const parsed = data.map(mapFromDb);
-      setItems(parsed);
-    }
-    setLoading(false);
-  };
-
-  const handleLogin = (section: string) => {
-    setUser(section);
-    setIsAdmin(section === 'QA (Quality Assurance)');
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    setIsAdmin(false);
-    setItems([]);
-    setCurrentView('dashboard');
-  };
-
-  const handleCreate = async (newItem: RegistryItem) => {
-    const itemToSave = { ...newItem, section: user! };
-    // Set initial status to IMPLEMENTATION (skipping Plan Review)
-    // and ensure mandatory action plans logic in wizard is respected
-    const dbPayload = mapToDb(itemToSave);
-    const { error } = await supabase.from('registry_items').insert(dbPayload);
-    if (!error) {
-      fetchItems();
-      setShowWizard(false);
-    } else {
-      alert('Error creating item: ' + error.message);
-    }
-  };
-
-  const handleUpdate = async (updatedItem: RegistryItem) => {
-    const dbPayload = mapToDb(updatedItem);
-    const { error } = await supabase.from('registry_items').update(dbPayload).eq('id', updatedItem.id);
-    if (!error) {
-      setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('registry_items').delete().eq('id', id);
-    if (!error) {
-      setItems(items.filter(i => i.id !== id));
-      setSelectedItem(null);
-    }
-  };
-
-  // --- Derived Data ---
-  
-  const displayIds = useMemo(() => getDisplayIds(items), [items]);
-
-  const availableYears = useMemo(() => {
-    const years = new Set<string>();
-    items.forEach(item => {
-      // Robust check for date existence before split
-      if (item.dateIdentified && typeof item.dateIdentified === 'string') {
-         const y = item.dateIdentified.split('-')[0];
-         if (y) years.add(y);
-      } else if (item.createdAt && typeof item.createdAt === 'string') {
-         const y = item.createdAt.split('-')[0];
-         if (y) years.add(y);
-      }
-    });
-    return Array.from(years).sort().reverse();
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    let filtered = items;
-    
-    // Section Filter (if not Admin viewing global)
-    if (!isAdmin) {
-      filtered = filtered.filter(i => i.section === user);
-    }
-
-    // View-Based Filtering
-    if (currentView === 'pending_tasks') {
-        // QA Pending Tasks: anything not Closed
-        filtered = filtered.filter(i => i.status !== 'CLOSED');
-    } else if (currentView === 'ro_list') {
-        // R&O List: Apply manual filters
-        if (filterYear !== 'All') {
-             filtered = filtered.filter(i => i.dateIdentified?.startsWith(filterYear) || i.createdAt?.startsWith(filterYear));
-        }
-        if (filterStatus !== 'All') {
-             if (filterStatus === 'Open') filtered = filtered.filter(i => i.status !== 'CLOSED');
-             else if (filterStatus === 'Closed') filtered = filtered.filter(i => i.status === 'CLOSED');
-        }
-        if (filterType !== 'All') {
-            filtered = filtered.filter(i => i.type === filterType.toUpperCase());
-        }
-    }
-
-    return filtered;
-  }, [items, isAdmin, user, currentView, filterYear, filterStatus, filterType]);
-
-  const sortedItems = useMemo(() => {
-    let sortable = [...filteredItems];
-    if (sortConfig !== null) {
-      sortable.sort((a, b) => {
-        // Special sorting for "Ref #" using createdAt which mimics the ID order
-        if (sortConfig.key === 'id') {
-             const dateA = new Date(a.createdAt).getTime();
-             const dateB = new Date(b.createdAt).getTime();
-             return sortConfig.direction === 'asc' ? dateA - dateB : dateB - dateA;
-        }
-
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-        
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    } else {
-      // Default Sort: Newest First
-      sortable.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-    return sortable;
-  }, [filteredItems, sortConfig]);
-
-  const handleSort = (key: keyof RegistryItem) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  // --- Render Helpers ---
-
-  const renderTable = (data: RegistryItem[], columns: any[], onRowClick: any, maxHeight?: string) => (
-    <div className={`overflow-x-auto rounded-lg shadow border border-gray-200 bg-white ${maxHeight ? 'overflow-y-auto ' + maxHeight : ''}`}>
-      <table className="w-full text-sm text-left text-gray-500 relative">
-         <thead className={`text-xs text-gray-700 uppercase bg-gray-50 border-b ${maxHeight ? 'sticky top-0 z-10 shadow-sm' : ''}`}>
-            <tr>
-              {columns.map((col: any) => (
-                <th 
-                    key={col.key} 
-                    className={`px-6 py-3 cursor-pointer hover:bg-gray-100 transition ${col.hidden ? 'hidden md:table-cell' : ''}`}
-                    onClick={() => handleSort(col.sortKey || col.key)}
-                >
-                  <div className="flex items-center gap-1">
-                    {col.label}
-                    <ArrowUpDown size={12} className="opacity-50"/>
-                  </div>
-                </th>
-              ))}
-              <th className="px-6 py-3 text-right">Action</th>
-            </tr>
-         </thead>
-         <tbody className="divide-y divide-gray-100">
-            {data.length === 0 ? (
-                <tr><td colSpan={columns.length + 1} className="px-6 py-8 text-center text-gray-400">No records found.</td></tr>
-            ) : data.map((item) => (
-               <tr key={item.id} onClick={() => onRowClick(item)} className="bg-white hover:bg-gray-50 cursor-pointer transition">
-                  {columns.map((col: any) => (
-                    <td key={col.key} className={`px-6 py-4 font-medium ${col.hidden ? 'hidden md:table-cell' : ''}`}>
-                      {col.render ? col.render(item) : (item as any)[col.key]}
-                    </td>
-                  ))}
-                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => setAuditTrailItem(item)} className="text-gray-400 hover:text-osmak-600 transition p-1 rounded-full hover:bg-gray-100" title="View History">
-                        <History size={16}/>
-                    </button>
-                  </td>
-               </tr>
-            ))}
-         </tbody>
-      </table>
-    </div>
-  );
-
-  const DashboardView = () => {
-    const sectionItems = isAdmin ? items : items.filter(i => i.section === user);
-    
-    // Deadlines Logic
-    const deadlines = sectionItems
-      .filter(i => i.status !== 'CLOSED' && i.actionPlans.some(ap => ap.status !== 'COMPLETED'))
-      .map(item => ({ item, meta: getDaysRemaining(item) }))
-      .filter(x => x.meta !== null)
-      .sort((a, b) => a.meta!.days - b.meta!.days)
-      .slice(0, 4);
-
-    const openRisks = sectionItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
-    const openOpps = sectionItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
-
-    return (
-      <div className="space-y-8 animate-fadeIn">
-        {/* Deadline Cards */}
-        {deadlines.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-             {deadlines.map(({ item, meta }) => (
-               <div key={item.id} onClick={() => setSelectedItem(item)} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer flex flex-col">
-                  <div className="flex justify-between items-start mb-2">
-                     <span className="font-mono text-xs text-gray-400">{displayIds[item.id]}</span>
-                     <span className={`text-xs font-bold uppercase ${meta!.color}`}>{meta!.label}</span>
-                  </div>
-                  <p className="text-sm font-semibold text-gray-800 line-clamp-2 mb-2 flex-1">{item.description}</p>
-                  <div className="flex justify-between items-center text-xs mt-auto">
-                     <span className="text-gray-500">{item.section}</span>
-                     <ChevronRight size={14} className="text-gray-400"/>
-                  </div>
-               </div>
-             ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-           {/* Open Risks Table */}
-           <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                  <AlertTriangle className="text-red-500" size={20}/> Open Risks
-                </h3>
-                <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">{openRisks.length}</span>
-              </div>
-              {renderTable(
-                openRisks, 
-                [
-                  { key: 'id', label: 'Ref #', render: (i: RegistryItem) => <span className="font-mono text-xs">{displayIds[i.id]}</span> },
-                  { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="line-clamp-1">{i.description}</span> },
-                  { key: 'riskLevel', label: 'Level', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getRiskColor(i.riskLevel)}`}>{i.riskLevel}</span>},
-                  { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
-                ],
-                setSelectedItem,
-                "max-h-[350px]"
-              )}
-           </div>
-
-           {/* Open Opportunities Table */}
-           <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                  <Lightbulb className="text-green-500" size={20}/> Open Opportunities
-                </h3>
-                <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded-full">{openOpps.length}</span>
-              </div>
-              {renderTable(
-                openOpps, 
-                [
-                  { key: 'id', label: 'Ref #', render: (i: RegistryItem) => <span className="font-mono text-xs">{displayIds[i.id]}</span> },
-                  { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="line-clamp-1">{i.description}</span> },
-                  { key: 'feasibility', label: 'Feasibility', render: (i: RegistryItem) => <span className="text-xs font-bold text-green-700">{i.feasibility}</span>},
-                  { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
-                ],
-                setSelectedItem,
-                "max-h-[350px]"
-              )}
-           </div>
-        </div>
-      </div>
-    );
-  };
-
-  const ROListView = () => {
-    return (
-        <div className="space-y-4 animate-fadeIn">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    <ListFilter className="text-osmak-green"/> Registry List (R&O)
-                </h2>
-                <div className="flex gap-2">
-                    <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="p-2 border rounded text-sm bg-gray-50">
-                        <option value="All">All Years</option>
-                        {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="p-2 border rounded text-sm bg-gray-50">
-                        <option value="All">All Types</option>
-                        <option value="Risk">Risks</option>
-                        <option value="Opportunity">Opportunities</option>
-                    </select>
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="p-2 border rounded text-sm bg-gray-50">
-                        <option value="All">All Status</option>
-                        <option value="Open">Open</option>
-                        <option value="Closed">Closed</option>
-                    </select>
-                </div>
-            </div>
-
-            {renderTable(
-                sortedItems,
-                [
-                    { key: 'id', label: 'Ref #', sortKey: 'id', render: (i: RegistryItem) => <span className="font-mono font-bold text-osmak-700">{displayIds[i.id]}</span> },
-                    { key: 'dateIdentified', label: 'Date ID', render: (i: RegistryItem) => <span className="text-xs">{i.dateIdentified}</span> },
-                    { key: 'section', label: 'Section', hidden: !isAdmin },
-                    { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="font-medium">{i.description}</span> },
-                    { key: 'type', label: 'Type', render: (i: RegistryItem) => i.type === 'RISK' ? <span className="text-red-600 font-bold text-xs">RISK</span> : <span className="text-green-600 font-bold text-xs">OPP</span> },
-                    { key: 'riskLevel', label: 'Level/Feas.', render: (i: RegistryItem) => i.type === 'RISK' ? <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getRiskColor(i.riskLevel)}`}>{i.riskLevel}</span> : <span className="text-xs font-bold text-green-700">{i.feasibility}</span> },
-                    { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
-                ],
-                setSelectedItem,
-                "max-h-[550px]"
             )}
         </div>
-    );
-  };
-
-  if (!user) {
-    return <Login onLogin={handleLogin} />;
-  }
-
-  return (
-    <div className="min-h-screen bg-[#F0FFF4] flex flex-col md:flex-row">
-      {/* Mobile Sidebar Overlay */}
-      <div className="md:hidden fixed inset-0 bg-black/50 z-40 hidden" id="mobile-overlay"></div>
-
-      {/* Sidebar */}
-      <aside className="w-64 bg-osmak-green shadow-xl z-50 flex flex-col fixed md:sticky top-0 h-screen transition-transform duration-300 transform -translate-x-full md:translate-x-0">
-        <SidebarHeader onClose={() => {}} />
-        
-        <div className="p-6 flex flex-col gap-6 flex-1 overflow-y-auto">
-          <div className="bg-green-800/50 rounded-lg p-4 border border-green-700/50">
-             <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white font-bold">
-                   {user.charAt(0)}
-                </div>
-                <div>
-                   <p className="text-green-100 text-xs uppercase tracking-wider font-semibold">Logged in as</p>
-                   <p className="text-white font-bold text-sm leading-tight">{isAdmin ? 'Quality Assurance' : user}</p>
-                   {isAdmin && <span className="text-[10px] bg-yellow-400 text-yellow-900 px-1.5 rounded font-bold mt-1 inline-block">AUDITOR</span>}
-                </div>
-             </div>
-          </div>
-
-          <nav className="space-y-1">
-             <button onClick={() => setCurrentView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'dashboard' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
-                <LayoutDashboard size={20}/> Dashboard
-             </button>
-             {isAdmin && (
-                <button onClick={() => setCurrentView('pending_tasks')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'pending_tasks' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
-                   <ClipboardList size={20}/> Pending Tasks
-                </button>
-             )}
-             
-             {/* Unified R&O List Menu Item */}
-             <button onClick={() => setCurrentView('ro_list')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'ro_list' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
-                <ListFilter size={20}/> R&O List
-             </button>
-
-             <button onClick={() => setCurrentView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition font-medium ${currentView === 'analysis' ? 'bg-white text-osmak-green shadow-md' : 'text-green-100 hover:bg-green-700'}`}>
-                <BarChart3 size={20}/> Data Analysis
-             </button>
-          </nav>
-
-          <div className="mt-auto space-y-3">
-             {!isAdmin && (
-               <button onClick={() => setShowWizard(true)} className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition transform active:scale-95">
-                  <PlusCircle size={20}/> New Entry
-               </button>
-             )}
-             <button onClick={handleLogout} className="w-full border border-green-400 text-green-100 hover:bg-green-700 font-medium py-3 rounded-lg transition flex items-center justify-center gap-2">
-                <LogOut size={18}/> Logout
-             </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
-         <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 shadow-sm">
-            <h2 className="text-xl font-bold text-gray-800 uppercase tracking-tight">
-               {currentView === 'dashboard' ? 'Dashboard Overview' : 
-                currentView === 'pending_tasks' ? 'Pending Tasks' :
-                currentView === 'ro_list' ? 'Risks & Opportunities List' :
-                'Data Analysis'}
-            </h2>
-            <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-500 hidden sm:inline-block">
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                </span>
-            </div>
-         </header>
-
-         <div className="p-4 md:p-8 overflow-y-auto flex-1">
-            {loading ? (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                    <Loader2 size={48} className="animate-spin mb-4 text-osmak-green"/>
-                    <p>Loading registry data...</p>
-                </div>
-            ) : (
-                <>
-                    {currentView === 'dashboard' && <DashboardView />}
-                    
-                    {currentView === 'pending_tasks' && (
-                        <div className="space-y-4 animate-fadeIn">
-                             <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3 text-blue-800">
-                                <Info size={24}/>
-                                <div>
-                                    <h3 className="font-bold">Pending Verification</h3>
-                                    <p className="text-sm">These items require your attention for verification or closure.</p>
-                                </div>
-                             </div>
-                             {renderTable(
-                                sortedItems, 
-                                [
-                                    { key: 'id', label: 'Ref #', render: (i: RegistryItem) => <span className="font-mono text-xs">{displayIds[i.id]}</span> },
-                                    { key: 'section', label: 'Section' },
-                                    { key: 'description', label: 'Description', render: (i: RegistryItem) => <span className="font-medium">{i.description}</span> },
-                                    { key: 'status', label: 'Status', render: (i: RegistryItem) => <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getPillColor(i.status)}`}>{formatStatus(i.status)}</span> }
-                                ],
-                                setSelectedItem
-                             )}
-                        </div>
-                    )}
-
-                    {currentView === 'ro_list' && <ROListView />}
-
-                    {currentView === 'analysis' && (
-                        <div className="animate-fadeIn text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
-                            <BarChart3 size={64} className="mx-auto text-gray-300 mb-4"/>
-                            <h3 className="text-xl font-bold text-gray-400">Data Analysis Module</h3>
-                            <p className="text-gray-500">Charts and reporting features will be displayed here.</p>
-                        </div>
-                    )}
-                </>
-            )}
-         </div>
-      </main>
-
-      {/* Modals */}
-      {selectedItem && (
-        <ItemDetailModal 
-          item={selectedItem} 
-          isQA={isAdmin} 
-          currentUser={user}
-          displayId={displayIds[selectedItem.id]}
-          onClose={() => setSelectedItem(null)} 
-          onUpdate={(updated) => { handleUpdate(updated); setSelectedItem(updated); }}
-          onDelete={handleDelete}
-        />
-      )}
-
-      {showWizard && (
-        <Wizard 
-          section={user!} 
-          onClose={() => setShowWizard(false)} 
-          onSubmit={handleCreate} 
-        />
-      )}
-
-      {auditTrailItem && (
-         <AuditTrailModal 
-            trail={auditTrailItem.auditTrail} 
-            itemId={displayIds[auditTrailItem.id]} 
-            onClose={() => setAuditTrailItem(null)}
-         />
-      )}
+      </div>
     </div>
   );
 }
 
-// --- Simplified Wizard Component (No Plan Review Step) ---
-const Wizard = ({ section, onClose, onSubmit }: { section: string, onClose: () => void, onSubmit: (item: RegistryItem) => void }) => {
+const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => void, onSave: (item: any) => void }) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<Partial<RegistryItem>>({
-    id: `R-${Date.now()}`, // Temporary ID, simplified in list view
     section,
     type: 'RISK',
-    dateIdentified: new Date().toISOString().split('T')[0],
-    actionPlans: []
+    actionPlans: [],
+    dateIdentified: new Date().toISOString().split('T')[0]
   });
-
-  const updateData = (updates: Partial<RegistryItem>) => setData({ ...data, ...updates });
-
-  const nextStep = () => setStep(step + 1);
-  const prevStep = () => setStep(step - 1);
-
-  // Validate Step 1
-  const step1Valid = data.process && data.source && data.description && data.dateIdentified;
   
-  // Validate Step 2 (Scoring)
-  const step2Valid = data.type === 'RISK' 
-     ? (data.likelihood && data.severity && data.impactQMS && data.existingControls) 
-     : (data.expectedBenefit && data.feasibility);
+  // Step 3 State
+  const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
 
-  // Validate Step 3 (Action Plan MANDATORY)
-  const isMandatoryAction = true; // Now mandatory for all
-  const step3Valid = !isMandatoryAction || (data.actionPlans && data.actionPlans.length > 0);
-
-  // Risk Calc for Wizard
-  const riskRating = (data.likelihood || 0) * (data.severity || 0);
-  const riskLevel = calculateRiskLevel(data.likelihood || 0, data.severity || 0);
-
-  const [currentPlan, setCurrentPlan] = useState<Partial<ActionPlan>>({
-    strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: ''
-  });
-
-  const addActionPlan = () => {
-    if (!currentPlan.description || !currentPlan.strategy) return;
-    const newPlan: ActionPlan = {
-      id: `AP-${Date.now()}`,
-      strategy: currentPlan.strategy!,
-      description: currentPlan.description!,
-      evidence: currentPlan.evidence!,
-      responsiblePerson: currentPlan.responsiblePerson!,
-      targetDate: currentPlan.targetDate!,
-      status: 'APPROVED' // Auto-approved
-    };
-    updateData({ actionPlans: [...(data.actionPlans || []), newPlan] });
-    setCurrentPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
-  };
-
-  const removePlan = (id: string) => {
-      updateData({ actionPlans: data.actionPlans?.filter(p => p.id !== id) });
-  };
+  const isMandatoryAction = true;
+  const canSubmit = isMandatoryAction ? data.actionPlans?.length > 0 : true;
 
   const strategies = data.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-fadeIn overflow-hidden">
-        {/* Wizard Header */}
-        <div className="bg-osmak-green p-6 text-white flex justify-between items-center">
-          <div>
-             <h2 className="text-2xl font-bold">New Registry Entry</h2>
-             <p className="text-green-100 text-sm">Step {step} of 3: {step === 1 ? 'Context & Identification' : step === 2 ? 'Assessment & Scoring' : 'Action Planning'}</p>
-          </div>
-          <button onClick={onClose}><XCircle size={32} className="hover:text-green-200 transition"/></button>
-        </div>
+  const handleNext = () => {
+    // Validation
+    if (step === 1) {
+        if (!data.process || !data.source || !data.description || !data.dateIdentified) {
+            alert("Please fill in all required fields.");
+            return;
+        }
+    }
+    if (step === 2) {
+       if (data.type === 'RISK' && (!data.impactQMS || !data.likelihood || !data.severity || !data.existingControls)) {
+           alert("Please complete the risk assessment.");
+           return;
+       }
+       if (data.type === 'OPPORTUNITY' && (!data.expectedBenefit || !data.feasibility)) {
+           alert("Please complete the opportunity assessment.");
+           return;
+       }
+    }
+    setStep(step + 1);
+  }
 
-        {/* Wizard Body */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-6">
-           {step === 1 && (
-             <div className="space-y-6 animate-fadeIn">
-                <div className="grid grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Process / Function</label>
-                        <input type="text" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" placeholder="e.g. Patient Admission" value={data.process} onChange={e => updateData({ process: e.target.value })} />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Date Identified</label>
-                        <input type="date" className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" value={data.dateIdentified} onChange={e => updateData({ dateIdentified: e.target.value })} />
-                    </div>
+  const addActionPlan = () => {
+    if (!newPlan.description || !newPlan.strategy) return;
+    setData(prev => ({
+      ...prev,
+      actionPlans: [...(prev.actionPlans || []), { 
+        id: `AP-${Date.now()}`, 
+        ...newPlan, 
+        status: 'APPROVED' // Auto-approved as Plan Review is skipped
+      }]
+    }));
+    setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
+  };
+
+  const removeActionPlan = (idx: number) => {
+    setData(prev => ({
+      ...prev,
+      actionPlans: prev.actionPlans?.filter((_, i) => i !== idx)
+    }));
+  };
+
+  const updateRisk = (l: number, s: number) => {
+    setData(prev => ({
+      ...prev,
+      likelihood: l,
+      severity: s,
+      riskRating: l * s,
+      riskLevel: calculateRiskLevel(l, s)
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-osmak-green p-4 text-white flex justify-between items-center">
+          <h2 className="font-bold flex items-center gap-2"><PlusCircle size={20}/> New Registry Entry</h2>
+          <button onClick={onClose}><XCircle size={24} className="hover:text-osmak-200"/></button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Progress Bar */}
+          <div className="flex gap-2 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className={`h-2 flex-1 rounded-full ${i <= step ? 'bg-osmak-500' : 'bg-gray-200'}`} />
+            ))}
+          </div>
+
+          {step === 1 && (
+            <div className="space-y-4 animate-fadeIn">
+              <h3 className="font-bold text-lg text-gray-800">1. Context & Description</h3>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Entry Type</label>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setData({...data, type: 'RISK'})}
+                    className={`flex-1 py-3 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${data.type === 'RISK' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-500'}`}
+                  >
+                    <ShieldAlert size={20}/> Risk
+                  </button>
+                  <button 
+                    onClick={() => setData({...data, type: 'OPPORTUNITY'})}
+                    className={`flex-1 py-3 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${data.type === 'OPPORTUNITY' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'}`}
+                  >
+                    <Lightbulb size={20}/> Opportunity
+                  </button>
                 </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Source</label>
-                    <select className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" value={SOURCES.includes(data.source || '') ? data.source : 'Others'} onChange={e => updateData({ source: e.target.value === 'Others' ? '' : e.target.value })}>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date Identified</label>
+                <input 
+                  type="date" 
+                  className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300"
+                  value={data.dateIdentified}
+                  onChange={e => setData({...data, dateIdentified: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Process / Function</label>
+                <input type="text" className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" value={data.process || ''} onChange={e => setData({...data, process: e.target.value})} placeholder="e.g. Document Control" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Source</label>
+                <div className="relative">
+                    <select 
+                        className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300 appearance-none"
+                        value={SOURCES.includes(data.source || '') ? data.source : 'Others'}
+                        onChange={e => {
+                            if (e.target.value === 'Others') setData({...data, source: ''});
+                            else setData({...data, source: e.target.value});
+                        }}
+                    >
                         {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    {(!SOURCES.includes(data.source || '') || data.source === '') && (
-                        <input type="text" className="w-full border p-3 rounded-lg mt-2 focus:ring-2 focus:ring-green-500 bg-white text-gray-900 border-gray-300" placeholder="Specify Source..." value={data.source} onChange={e => updateData({ source: e.target.value })} />
-                    )}
+                    <ChevronDown className="absolute right-3 top-3 text-gray-400 pointer-events-none" size={16} />
                 </div>
-                <div>
-                   <label className="block text-sm font-bold text-gray-700 mb-1">Entry Type</label>
-                   <div className="flex gap-4">
-                      <button onClick={() => updateData({ type: 'RISK' })} className={`flex-1 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition ${data.type === 'RISK' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 hover:border-red-200'}`}>
-                         <AlertTriangle size={32}/>
-                         <span className="font-bold">RISK</span>
-                      </button>
-                      <button onClick={() => updateData({ type: 'OPPORTUNITY' })} className={`flex-1 py-4 rounded-xl border-2 flex flex-col items-center gap-2 transition ${data.type === 'OPPORTUNITY' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-green-200'}`}>
-                         <Lightbulb size={32}/>
-                         <span className="font-bold">OPPORTUNITY</span>
-                      </button>
-                   </div>
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-1">Description</label>
-                    <textarea className="w-full border p-3 rounded-lg focus:ring-2 focus:ring-green-500 h-24 bg-white text-gray-900 border-gray-300" placeholder={`Describe the ${data.type?.toLowerCase()}...`} value={data.description} onChange={e => updateData({ description: e.target.value })}></textarea>
-                </div>
-             </div>
-           )}
-
-           {step === 2 && (
-             <div className="space-y-6 animate-fadeIn">
-                {data.type === 'RISK' ? (
-                   <>
-                     <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-center justify-between">
-                        <div>
-                            <span className="text-red-800 text-xs font-bold uppercase">Calculated Risk Level</span>
-                            <h3 className={`text-3xl font-bold ${riskLevel === 'CRITICAL' ? 'text-red-700' : riskLevel === 'HIGH' ? 'text-orange-600' : 'text-yellow-700'}`}>{riskLevel} ({riskRating})</h3>
-                        </div>
-                        <AlertTriangle size={48} className="text-red-200"/>
-                     </div>
-                     <div className="grid grid-cols-2 gap-8">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Likelihood (1-5)</label>
-                            <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600" value={data.likelihood || 1} onChange={e => updateData({ likelihood: parseInt(e.target.value) })} />
-                            <div className="flex justify-between text-xs text-gray-400 mt-2">
-                               <span>1: Rare</span><span>5: Almost Certain</span>
-                            </div>
-                            <p className="text-sm font-medium text-red-600 mt-1">{LIKELIHOOD_DESC[data.likelihood || 1]}</p>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-2">Severity (1-5)</label>
-                            <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-600" value={data.severity || 1} onChange={e => updateData({ severity: parseInt(e.target.value) })} />
-                            <div className="flex justify-between text-xs text-gray-400 mt-2">
-                               <span>1: Insignificant</span><span>5: Critical</span>
-                            </div>
-                            <p className="text-sm font-medium text-red-600 mt-1">{SEVERITY_DESC[data.severity || 1]}</p>
-                        </div>
-                     </div>
-                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Potential Impact on QMS</label>
-                        <textarea className="w-full border p-3 rounded-lg bg-white text-gray-900 border-gray-300" value={data.impactQMS} onChange={e => updateData({ impactQMS: e.target.value })}></textarea>
-                     </div>
-                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Existing Controls</label>
-                        <textarea className="w-full border p-3 rounded-lg bg-white text-gray-900 border-gray-300" value={data.existingControls} onChange={e => updateData({ existingControls: e.target.value })}></textarea>
-                     </div>
-                     <div className="bg-yellow-50 p-3 rounded border border-yellow-200 text-sm text-yellow-800 flex gap-2">
-                         <Info size={16} className="shrink-0 mt-0.5"/>
-                         <p><strong>Mandatory Action Strategy:</strong> All risks require an action plan.</p>
-                     </div>
-                   </>
-                ) : (
-                   <>
-                     <div className="grid grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Expected Benefit</label>
-                            <textarea className="w-full border p-3 rounded-lg h-32 bg-white text-gray-900 border-gray-300" value={data.expectedBenefit} onChange={e => updateData({ expectedBenefit: e.target.value })}></textarea>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Feasibility</label>
-                            <select className="w-full border p-3 rounded-lg bg-white text-gray-900 border-gray-300" value={data.feasibility} onChange={e => updateData({ feasibility: e.target.value as any })}>
-                                <option value="LOW">Low</option>
-                                <option value="MEDIUM">Medium</option>
-                                <option value="HIGH">High</option>
-                            </select>
-                        </div>
-                     </div>
-                   </>
+                {(!SOURCES.includes(data.source || '') || data.source === '') && (
+                    <input 
+                        type="text" 
+                        className="w-full border p-2 rounded mt-2 bg-white text-gray-900 border-gray-300" 
+                        placeholder="Please specify source..."
+                        value={data.source || ''}
+                        onChange={e => setData({...data, source: e.target.value})}
+                    />
                 )}
-             </div>
-           )}
+              </div>
 
-           {step === 3 && (
-             <div className="space-y-6 animate-fadeIn">
-                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
-                   <h3 className="text-blue-900 font-bold mb-1">Action Planning</h3>
-                   <p className="text-blue-800 text-sm mb-4">Define how you will address this {data.type?.toLowerCase()}. At least one action plan is mandatory.</p>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <select className="p-2 border rounded bg-white text-gray-900 border-gray-300" value={currentPlan.strategy} onChange={e => setCurrentPlan({...currentPlan, strategy: e.target.value})}>
-                          <option value="">Select Strategy</option>
-                          {Object.keys(strategies).map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      <input type="text" className="p-2 border rounded bg-white text-gray-900 border-gray-300" placeholder="Action Description" value={currentPlan.description} onChange={e => setCurrentPlan({...currentPlan, description: e.target.value})} />
-                      <input type="text" className="p-2 border rounded bg-white text-gray-900 border-gray-300" placeholder="Verification Evidence (e.g. Logs)" value={currentPlan.evidence} onChange={e => setCurrentPlan({...currentPlan, evidence: e.target.value})} />
-                      <div className="flex gap-2">
-                        <input type="text" className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300" placeholder="Responsible" value={currentPlan.responsiblePerson} onChange={e => setCurrentPlan({...currentPlan, responsiblePerson: e.target.value})} />
-                        <input type="date" className="flex-1 p-2 border rounded bg-white text-gray-900 border-gray-300" value={currentPlan.targetDate} onChange={e => setCurrentPlan({...currentPlan, targetDate: e.target.value})} />
-                      </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.description || ''} onChange={e => setData({...data, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && data.type === 'RISK' && (
+            <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-bold text-lg text-gray-800">2. Risk Assessment</h3>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Potential Impact on QMS</label>
+                <textarea className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" value={data.impactQMS || ''} onChange={e => setData({...data, impactQMS: e.target.value})} />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Likelihood (1-5)</label>
+                    <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={data.likelihood || 1} onChange={e => updateRisk(parseInt(e.target.value), data.severity || 1)} />
+                    <div className="text-xs text-gray-500 mt-1 font-medium">{LIKELIHOOD_DESC[data.likelihood || 1]}</div>
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Severity (1-5)</label>
+                    <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={data.severity || 1} onChange={e => updateRisk(data.likelihood || 1, parseInt(e.target.value))} />
+                    <div className="text-xs text-gray-500 mt-1 font-medium">{SEVERITY_DESC[data.severity || 1]}</div>
+                 </div>
+              </div>
+
+              <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
+                 <div>
+                    <span className="text-gray-500 text-xs uppercase font-bold">Risk Rating</span>
+                    <div className="text-2xl font-bold text-gray-800">{data.riskRating || 1}</div>
+                 </div>
+                 <div className="text-right">
+                    <span className="text-gray-500 text-xs uppercase font-bold">Risk Level</span>
+                    <div className={`px-3 py-1 rounded-full text-sm font-bold uppercase ${getRiskColor(data.riskLevel)}`}>{data.riskLevel || 'LOW'}</div>
+                 </div>
+              </div>
+
+              {/* Action Required Guidance */}
+              <div className={`p-4 rounded-lg border text-sm ${
+                data.riskLevel === 'CRITICAL' ? 'bg-red-50 border-red-200 text-red-800' :
+                data.riskLevel === 'HIGH' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                data.riskLevel === 'MODERATE' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                'bg-green-50 border-green-200 text-green-800'
+              }`}>
+                 <strong className="block mb-1">Mandated Action Strategy:</strong>
+                 {data.riskLevel === 'CRITICAL' && "Urgent Action Required. Immediate mitigation and Top Management attention."}
+                 {data.riskLevel === 'HIGH' && "Action Needed. Detailed mitigation plan required."}
+                 {data.riskLevel === 'MODERATE' && "Action Plan Required. Detailed mitigation or monitoring plan required."}
+                 {data.riskLevel === 'LOW' && "Action Plan Required. Detailed mitigation or monitoring plan required."}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Existing Controls</label>
+                <textarea className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" value={data.existingControls || ''} onChange={e => setData({...data, existingControls: e.target.value})} placeholder="What is currently in place?" />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && data.type === 'OPPORTUNITY' && (
+            <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-bold text-lg text-gray-800">2. Opportunity Assessment</h3>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expected Benefit</label>
+                <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.expectedBenefit || ''} onChange={e => setData({...data, expectedBenefit: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Feasibility</label>
+                <select className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" value={data.feasibility || 'MEDIUM'} onChange={e => setData({...data, feasibility: e.target.value as any})}>
+                    <option value="LOW">Low - Hard to implement</option>
+                    <option value="MEDIUM">Medium - Manageable</option>
+                    <option value="HIGH">High - Easy win</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6 animate-fadeIn">
+               <h3 className="font-bold text-lg text-gray-800">3. Action Planning</h3>
+               {isMandatoryAction ? (
+                   <div className="bg-blue-50 text-blue-800 p-3 rounded text-sm mb-4 flex items-center gap-2">
+                      <Info size={16} /> Action Plan is <strong>MANDATORY</strong> for this entry.
                    </div>
-                   <button onClick={addActionPlan} disabled={!currentPlan.description || !currentPlan.strategy} className="w-full bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 disabled:opacity-50">
-                      Add Action Plan
-                   </button>
-                </div>
+               ) : (
+                   <div className="bg-gray-50 text-gray-600 p-3 rounded text-sm mb-4">
+                      Action Plan is optional for Low/Moderate risks, but recommended.
+                   </div>
+               )}
 
-                <div className="space-y-2">
-                    <h4 className="font-bold text-gray-700 text-sm uppercase">Added Plans ({data.actionPlans?.length})</h4>
-                    {data.actionPlans?.length === 0 && <p className="text-gray-400 italic text-sm">No plans added yet.</p>}
-                    {data.actionPlans?.map(p => (
-                        <div key={p.id} className="bg-white border p-3 rounded-lg flex justify-between items-start shadow-sm">
-                            <div>
-                                <span className="text-xs font-bold bg-gray-200 px-2 py-0.5 rounded text-gray-700 uppercase mr-2">{p.strategy}</span>
-                                <span className="font-medium text-gray-800">{p.description}</span>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    By: {p.responsiblePerson} • Due: {p.targetDate}
-                                </div>
+               {/* List Added Actions */}
+               <div className="space-y-3">
+                  {data.actionPlans?.map((plan, idx) => (
+                      <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start">
+                          <div>
+                              <span className="text-xs font-bold uppercase text-gray-500">{plan.strategy}</span>
+                              <p className="font-medium text-sm text-gray-900">{plan.description}</p>
+                              <p className="text-xs text-gray-500 mt-1">By {plan.responsiblePerson} on {plan.targetDate}</p>
+                          </div>
+                          <button onClick={() => removeActionPlan(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                      </div>
+                  ))}
+               </div>
+
+               {/* Add New Action Form */}
+               <div className="border rounded-lg p-4 bg-gray-50">
+                  <h4 className="font-bold text-sm text-gray-700 mb-3">Add Action Plan</h4>
+                  <div className="space-y-3">
+                     <div>
+                        <select 
+                            className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm"
+                            value={newPlan.strategy}
+                            onChange={e => setNewPlan({...newPlan, strategy: e.target.value})}
+                        >
+                            <option value="">Select Strategy...</option>
+                            {Object.keys(strategies).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        {newPlan.strategy && (
+                            <div className="text-xs text-gray-500 mt-1 p-2 bg-white rounded border">
+                                <strong>{strategies[newPlan.strategy].desc}</strong> <br/>
+                                <em className="text-gray-400">Ex: {strategies[newPlan.strategy].ex}</em>
                             </div>
-                            <button onClick={() => removePlan(p.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
-                        </div>
-                    ))}
-                </div>
-             </div>
-           )}
+                        )}
+                     </div>
+                     <textarea 
+                        className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                        placeholder="Describe the action..." 
+                        value={newPlan.description}
+                        onChange={e => setNewPlan({...newPlan, description: e.target.value})}
+                     />
+                     <input 
+                        className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                        placeholder="Verification / Evidence (e.g. Photo)" 
+                        value={newPlan.evidence}
+                        onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
+                     />
+                     <div className="grid grid-cols-2 gap-2">
+                        <input 
+                            className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                            placeholder="Responsible" 
+                            value={newPlan.responsiblePerson}
+                            onChange={e => setNewPlan({...newPlan, responsiblePerson: e.target.value})}
+                        />
+                        <input 
+                            type="date"
+                            className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                            value={newPlan.targetDate}
+                            onChange={e => setNewPlan({...newPlan, targetDate: e.target.value})}
+                        />
+                     </div>
+                     <button 
+                        onClick={addActionPlan}
+                        disabled={!newPlan.description || !newPlan.strategy}
+                        className="w-full bg-osmak-600 text-white py-2 rounded text-sm font-bold hover:bg-osmak-700 disabled:opacity-50"
+                     >
+                        + Add to List
+                     </button>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4 animate-fadeIn text-center">
+               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={32} />
+               </div>
+               <h3 className="font-bold text-xl text-gray-900">Ready to Submit?</h3>
+               <p className="text-gray-600">Please review your details. Once submitted, it will be available for QA review.</p>
+               <div className="bg-gray-50 p-4 rounded text-left text-sm space-y-2">
+                  <p><strong>Type:</strong> {data.type}</p>
+                  <p><strong>Description:</strong> {data.description}</p>
+                  <p><strong>Actions Planned:</strong> {data.actionPlans?.length}</p>
+               </div>
+            </div>
+          )}
         </div>
 
-        {/* Footer */}
-        <div className="p-6 bg-gray-50 border-t flex justify-between items-center">
-            {step > 1 ? (
-                <button onClick={prevStep} className="px-6 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 font-bold">Back</button>
-            ) : (
-                <div></div>
-            )}
-            
-            {step < 3 ? (
-                <button onClick={nextStep} disabled={step === 1 ? !step1Valid : !step2Valid} className="px-8 py-3 bg-osmak-green text-white rounded-lg font-bold shadow hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                    Next Step
-                </button>
-            ) : (
-                <button onClick={() => {
-                    const finalItem = { 
-                        ...data, 
-                        status: 'IMPLEMENTATION' as WorkflowStatus,
-                        riskRating: (data.likelihood || 0) * (data.severity || 0),
-                        riskLevel: calculateRiskLevel(data.likelihood || 0, data.severity || 0)
-                    } as RegistryItem;
-                    onSubmit(finalItem);
-                }} disabled={!step3Valid} className="px-8 py-3 bg-osmak-green text-white rounded-lg font-bold shadow hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                    <Save size={20}/> Submit Entry
-                </button>
-            )}
+        <div className="p-4 bg-gray-50 border-t flex justify-between">
+          {step > 1 && <button onClick={() => setStep(step - 1)} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded">Back</button>}
+          {step < 4 ? (
+            <button onClick={handleNext} className="ml-auto px-6 py-2 bg-osmak-700 text-white rounded font-bold hover:bg-osmak-800">Next</button>
+          ) : (
+            <button 
+                onClick={() => onSave(data)} 
+                disabled={!canSubmit}
+                className="ml-auto px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {canSubmit ? 'Submit Entry' : 'Action Plan Required'}
+            </button>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => (
+  <header className="md:hidden sticky top-0 z-50 bg-osmak-green text-white p-4 shadow-md flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="Logo" className="h-10 w-10 object-contain" />
+      <div>
+        <h1 className="text-sm font-extrabold tracking-wide uppercase leading-tight">OSPITAL NG MAKATI</h1>
+        <span className="text-[0.65rem] font-medium tracking-wider text-green-50 opacity-90 block">Risk & Opportunities Registry</span>
+      </div>
+    </div>
+    <button 
+      onClick={onMenuClick}
+      className="p-1.5 border-2 border-green-400 rounded hover:bg-green-700 transition text-white"
+    >
+      <Menu size={24} />
+    </button>
+  </header>
+);
+
+const App = () => {
+  const [user, setUser] = useState<string | null>(null);
+  const [items, setItems] = useState<RegistryItem[]>([]);
+  const [view, setView] = useState<'DASHBOARD' | 'RO_LIST' | 'RISKS' | 'OPPORTUNITIES' | 'QA_PENDING' | 'QA_SECTION_VIEW' | 'QA_OPEN_RISKS' | 'QA_OPEN_OPPS' | 'QA_ANALYSIS' | 'QA_CLOSED_RISKS' | 'QA_CLOSED_OPPS'>('DASHBOARD');
+  const [selectedSection, setSelectedSection] = useState<string | null>(null); // For QA drill down
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
+  const [selectedAuditTrailItem, setSelectedAuditTrailItem] = useState<RegistryItem | null>(null);
+  const [dbConnected, setDbConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isSectionsOpen, setIsSectionsOpen] = useState(false);
+  const [closedFilterSection, setClosedFilterSection] = useState('');
+  
+  // Mobile Sidebar State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Sorting State
+  const [sortField, setSortField] = useState<'dateIdentified' | 'riskLevel' | 'status' | 'createdAt'>('dateIdentified');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // Analysis State
+  const [analysisStartDate, setAnalysisStartDate] = useState(new Date().getFullYear() + '-01-01');
+  const [analysisEndDate, setAnalysisEndDate] = useState(new Date().getFullYear() + '-12-31');
+
+  // List Filter State
+  const [listFilterYear, setListFilterYear] = useState<string>('ALL');
+  const [listFilterStatus, setListFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
+  const [listFilterType, setListFilterType] = useState<'ALL' | 'RISK' | 'OPPORTUNITY'>('ALL');
+
+  const displayIdMap = useMemo(() => getDisplayIds(items), [items]);
+
+  // Helper to get unique years from items
+  const availableYears = useMemo(() => {
+    const years = new Set(
+        items
+            .filter(i => i.dateIdentified) // Filter out empty/null
+            .map(i => i.dateIdentified.split('-')[0])
+    );
+    return Array.from(years).sort().reverse();
+  }, [items]);
+
+  // --- Supabase Integration ---
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('registry_items').select('*');
+      if (error) throw error;
+      if (data) {
+        setItems(data.map(mapFromDb));
+        setDbConnected(true);
+      }
+    } catch (err) {
+      console.error('Supabase connection error:', err);
+      setDbConnected(false);
+      // Fallback to local storage or empty
+      setItems([]); 
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) fetchData();
+  }, [user]);
+
+  const handleCreate = async (newItem: Partial<RegistryItem>) => {
+    const initialEvent: AuditEvent = {
+      timestamp: new Date().toISOString(),
+      event: 'Entry Created',
+      user: newItem.section || 'System',
+    };
+
+    const item: RegistryItem = {
+      ...newItem as RegistryItem,
+      id: `${newItem.type === 'RISK' ? 'R' : 'O'}-${Date.now().toString().slice(-6)}`,
+      status: 'IMPLEMENTATION', // Direct to implementation
+      createdAt: new Date().toISOString().split('T')[0],
+      riskLevel: newItem.type === 'RISK' ? calculateRiskLevel(newItem.likelihood || 1, newItem.severity || 1) : undefined,
+      auditTrail: [initialEvent]
+    };
+
+    try {
+        const { error } = await supabase.from('registry_items').insert(mapToDb(item));
+        if (error) throw error;
+        setItems(prev => [item, ...prev]);
+        setIsWizardOpen(false);
+    } catch (err) {
+        alert("Failed to save to database. Please check connection.");
+        console.error(err);
+    }
+  };
+
+  const handleUpdate = async (updatedItem: RegistryItem) => {
+    try {
+        const { error } = await supabase.from('registry_items').update(mapToDb(updatedItem)).eq('id', updatedItem.id);
+        if (error) throw error;
+        setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+        setSelectedItem(updatedItem); // Keep modal updated
+    } catch (err) {
+        alert("Update failed.");
+        console.error(err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+      try {
+          const { error } = await supabase.from('registry_items').delete().eq('id', id);
+          if (error) throw error;
+          setItems(prev => prev.filter(i => i.id !== id));
+          setSelectedItem(null);
+      } catch (err) {
+          alert("Delete failed.");
+          console.error(err);
+      }
+  }
+
+  const exportCSV = (data: RegistryItem[], filename: string) => {
+    const headers = [
+        'Ref #',
+        'Process/Function',
+        'Source',
+        'Description of Risk',
+        'Type (Risk or Opportunity)',
+        'Potential Impact on QMS',
+        'Likelihood',
+        'Severity',
+        'Risk Rating',
+        'Risk Level',
+        'Existing Controls/Mitigation',
+        'Action Plan',
+        'Responsible Person',
+        'Target Completion Date',
+        'Verification/Evidence',
+        'Status (Open or Closed)',
+        'Date of Re-Assessment',
+        'Residual Likelihood',
+        'Residual Severity',
+        'Residual Risk Rating',
+        'Residual Risk Level',
+        'Remarks on Effectiveness'
+    ];
+
+    // Helper to safely format CSV cells
+    const formatCell = (value: any) => {
+        if (value === null || value === undefined) {
+            return '""';
+        }
+        const stringValue = String(value);
+        // Escape double quotes by doubling them
+        const escapedValue = stringValue.replace(/"/g, '""');
+        // Wrap in double quotes if it contains commas, newlines, or double quotes
+        if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+             return `"${escapedValue}"`;
+        }
+        return stringValue;
+    };
+
+    const rows = data.map(item => {
+        // Aggregate action plans into single strings, separated by a newline within the cell
+        const actionPlansDesc = item.actionPlans.map(p => p.description).join('; ');
+        const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
+        const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
+        const evidences = item.actionPlans.map(p => p.evidence).join('; ');
+
+        const rowData = [
+            displayIdMap[item.id] || item.id,
+            item.process,
+            item.source,
+            item.description,
+            item.type,
+            item.impactQMS,
+            item.likelihood,
+            item.severity,
+            item.riskRating,
+            item.riskLevel,
+            item.existingControls,
+            actionPlansDesc,
+            responsiblePersons,
+            targetDates,
+            evidences,
+            item.status === 'CLOSED' ? 'Closed' : 'Open',
+            item.reassessmentDate,
+            item.residualLikelihood,
+            item.residualSeverity,
+            item.residualRiskRating,
+            item.residualRiskLevel,
+            item.effectivenessRemarks
+        ];
+        
+        return rowData.map(val => formatCell(val || '')).join(',');
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+
+  // --- Sorting Logic ---
+  const handleSort = (field: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt') => {
+      if (sortField === field) {
+          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortField(field);
+          setSortDirection('desc'); // Default to newest/highest first
+      }
+  };
+
+  const sortItems = (data: RegistryItem[]) => {
+      return [...data].sort((a, b) => {
+          let valA: any = a[sortField];
+          let valB: any = b[sortField];
+          
+          if (sortField === 'riskLevel') {
+              const levels = { 'LOW': 1, 'MODERATE': 2, 'HIGH': 3, 'CRITICAL': 4 };
+              valA = levels[a.riskLevel || 'LOW'] || 0;
+              valB = levels[b.riskLevel || 'LOW'] || 0;
+          }
+          
+          if (sortField === 'createdAt') {
+              valA = a.createdAt;
+              valB = b.createdAt;
+          }
+
+          if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+      });
+  };
+
+  // --- Filtering Logic ---
+  const isQA = user === 'QA (Quality Assurance)';
+  const activeSection = isQA && selectedSection ? selectedSection : user;
+  
+  // Filter items based on current view context
+  const contextItems = useMemo(() => {
+     if (isQA && !selectedSection) return items; // Global items for QA agg
+     return items.filter(i => i.section === activeSection);
+  }, [items, isQA, selectedSection, activeSection]);
+
+  const highRisks = contextItems.filter(i => i.type === 'RISK' && (i.riskLevel === 'HIGH' || i.riskLevel === 'CRITICAL') && i.status !== 'CLOSED');
+  const openRisks = contextItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
+  const openOpps = contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
+  
+  // QA Global Lists
+  const allOpenRisks = items.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
+  const allOpenOpps = items.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
+
+  // Pending tasks for QA
+  const pendingQA = items.filter(i => 
+    (i.status === 'IMPLEMENTATION' && i.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION')) ||
+    (i.status === 'QA_VERIFICATION')
+  );
+  
+  // Computed list for R&O List with Filters
+  const filteredROList = useMemo(() => {
+    return contextItems.filter(item => {
+        // Year Filter
+        if (listFilterYear !== 'ALL' && (!item.dateIdentified || !item.dateIdentified.startsWith(listFilterYear))) return false;
+        
+        // Status Filter
+        if (listFilterStatus === 'OPEN' && item.status === 'CLOSED') return false;
+        if (listFilterStatus === 'CLOSED' && item.status !== 'CLOSED') return false;
+        
+        // Type Filter
+        if (listFilterType !== 'ALL' && item.type !== listFilterType) return false;
+        
+        return true;
+    });
+  }, [contextItems, listFilterYear, listFilterStatus, listFilterType]);
+
+  const renderTable = (data: RegistryItem[], showDays = false, isClosed = false, type: EntryType | 'BOTH' = 'RISK') => {
+    const sortedData = sortItems(data);
+    
+    return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      {/* Table Header with Export Link for Open Risks on Dashboard */}
+      {view === 'DASHBOARD' && !isClosed && type === 'RISK' && (
+          <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b">
+              <h3 className="font-bold text-gray-700">Open Risks</h3>
+              <button onClick={() => exportCSV(data, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                  <Download size={14}/> CSV
+              </button>
+          </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-gray-50 text-gray-500 font-medium border-b">
+            <tr>
+              <th 
+                className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                onClick={() => handleSort('createdAt')}
+              >
+                  <div className="flex items-center gap-1">Ref # <ArrowUpDown size={14} className={sortField === 'createdAt' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                  onClick={() => handleSort('dateIdentified')}
+              >
+                  <div className="flex items-center gap-1">Date <ArrowUpDown size={14} className={sortField === 'dateIdentified' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              <th className="px-6 py-4 w-1/3">Description</th>
+              <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                  onClick={() => handleSort('status')}
+              >
+                  <div className="flex items-center gap-1">Status <ArrowUpDown size={14} className={sortField === 'status' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              {type === 'BOTH' ? (
+                <th className="px-6 py-4">Type</th>
+              ) : null}
+              <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                  onClick={() => handleSort('riskLevel')}
+              >
+                  <div className="flex items-center gap-1">Level / Feasibility <ArrowUpDown size={14} className={sortField === 'riskLevel' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              {showDays && <th className="px-6 py-4">Target</th>}
+              <th className="px-6 py-4 text-center">History</th>
+              <th className="px-6 py-4"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {sortedData.length === 0 ? (
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400 italic">No records found.</td></tr>
+            ) : sortedData.map(item => {
+              const days = getDaysRemaining(item);
+              const refId = displayIdMap[item.id] || item.id;
+              return (
+                <tr key={item.id} className="hover:bg-gray-50 transition group">
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-mono text-xs text-gray-500 font-bold cursor-pointer group-hover:text-gray-800">
+                      {refId}
+                  </td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-gray-600 text-xs cursor-pointer">
+                      {item.dateIdentified}
+                      <div className="text-[10px] text-gray-300 mt-0.5">DATE</div>
+                  </td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-medium text-gray-800 text-sm cursor-pointer">{item.description}</td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${getPillColor(item.status)}`}>
+                      {formatStatus(item.status)}
+                    </span>
+                  </td>
+                  {type === 'BOTH' ? (
+                    <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${item.type === 'RISK' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                        {item.type}
+                      </span>
+                    </td>
+                  ) : null}
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                     {item.type === 'RISK' ? (
+                        <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide ${getLevelPillColor(item.riskLevel)}`}>{item.riskLevel}</span>
+                     ) : (
+                        <span className="text-green-600 font-bold text-xs">{item.feasibility}</span>
+                     )}
+                  </td>
+                  {showDays && (
+                      <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                          {days ? (
+                              <div className="flex flex-col">
+                                  <span className={`text-xs font-bold ${days.days < 0 ? 'text-red-500' : 'text-orange-500'}`}>
+                                      {days.days < 0 ? `${Math.abs(days.days)} days late` : days.days === 0 ? 'Due today' : `${days.days} days left`}
+                                  </span>
+                              </div>
+                          ) : (
+                              <span className="text-gray-300 text-xs">-</span>
+                          )}
+                      </td>
+                  )}
+                  <td className="px-6 py-4 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAuditTrailItem(item);
+                      }}
+                      className="text-gray-300 hover:text-gray-600 transition-colors p-1"
+                      title="View Audit Trail"
+                    >
+                      <RotateCcw size={16} />
+                    </button>
+                  </td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-right cursor-pointer">
+                    <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )};
+
+  const DonutChart = ({ title, data, colors }: DonutChartProps) => {
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    let currentAngle = 0;
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
+            <h3 className="text-sm font-bold text-gray-600 mb-4 w-full text-left">{title}</h3>
+            <div className="relative w-40 h-40">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                    {Object.entries(data).map(([key, value]) => {
+                        if (value === 0) return null;
+                        const percentage = value / total;
+                        const angle = percentage * 360;
+                        const x1 = 50 + 40 * Math.cos((currentAngle * Math.PI) / 180);
+                        const y1 = 50 + 40 * Math.sin((currentAngle * Math.PI) / 180);
+                        const x2 = 50 + 40 * Math.cos(((currentAngle + angle) * Math.PI) / 180);
+                        const y2 = 50 + 40 * Math.sin(((currentAngle + angle) * Math.PI) / 180);
+                        
+                        const largeArcFlag = percentage > 0.5 ? 1 : 0;
+                        
+                        const pathData = total === value 
+                            ? `M 50 10 A 40 40 0 1 1 49.99 10` // Full circle
+                            : `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+
+                        const slice = (
+                            <path
+                                key={key}
+                                d={pathData}
+                                fill={colors[key] || '#ccc'}
+                                stroke="white"
+                                strokeWidth="2"
+                            />
+                        );
+                        currentAngle += angle;
+                        return slice;
+                    })}
+                    {total === 0 && (
+                        <circle cx="50" cy="50" r="40" fill="#f3f4f6" />
+                    )}
+                </svg>
+                {/* Hollow Center */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center">
+                        <span className="text-2xl font-bold text-gray-800">{total}</span>
+                        <span className="text-[10px] text-gray-400 uppercase">Total</span>
+                    </div>
+                </div>
+            </div>
+            <div className="mt-6 w-full space-y-2">
+                {Object.entries(data).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[key] }}></span>
+                            <span className="text-gray-600">{key}</span>
+                        </div>
+                        <span className="font-bold text-gray-800">{value} ({total > 0 ? Math.round((value/total)*100) : 0}%)</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+  };
+
+  const RiskHeatmap = ({ items }: { items: RegistryItem[] }) => {
+      // 5x5 Matrix Logic
+      const matrix = Array(5).fill(0).map(() => Array(5).fill(0));
+      
+      items.filter(i => i.type === 'RISK').forEach(item => {
+          if (item.likelihood && item.severity) {
+              // Indices are 0-based, scores are 1-based (1-5)
+              // Likelihood (Y-axis): 5 at top, 1 at bottom -> index = 5 - likelihood
+              // Severity (X-axis): 1 at left, 5 at right -> index = severity - 1
+              const row = 5 - item.likelihood;
+              const col = item.severity - 1;
+              matrix[row][col]++;
+          }
+      });
+
+      const getCellColor = (l: number, s: number, count: number) => {
+          const rating = l * s;
+          let baseColor = '';
+          if (rating >= 16) baseColor = 'bg-red-100 text-red-800 border-red-200'; // Critical
+          else if (rating >= 11) baseColor = 'bg-orange-100 text-orange-800 border-orange-200'; // High
+          else if (rating >= 6) baseColor = 'bg-yellow-100 text-yellow-800 border-yellow-200'; // Moderate
+          else baseColor = 'bg-green-100 text-green-800 border-green-200'; // Low
+
+          // Darken if populated
+          if (count > 0) {
+             if (rating >= 16) return 'bg-red-500 text-white font-bold';
+             if (rating >= 11) return 'bg-orange-500 text-white font-bold';
+             if (rating >= 6) return 'bg-yellow-400 text-black font-bold';
+             return 'bg-green-500 text-white font-bold';
+          }
+          return baseColor + ' opacity-40';
+      };
+
+      return (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Activity size={20}/> Risk Matrix Heatmap</h3>
+              <div className="flex">
+                  <div className="flex flex-col justify-between mr-4 py-8 h-64">
+                      <span className="text-xs font-bold text-gray-400 -rotate-90">Likelihood</span>
+                  </div>
+                  <div className="flex-1">
+                      <div className="grid grid-rows-5 gap-1 h-64">
+                          {[5, 4, 3, 2, 1].map((likelihood, rowIndex) => (
+                              <div key={likelihood} className="grid grid-cols-5 gap-1">
+                                  {[1, 2, 3, 4, 5].map((severity, colIndex) => {
+                                      const count = matrix[rowIndex][colIndex];
+                                      return (
+                                          <div 
+                                              key={`${likelihood}-${severity}`} 
+                                              className={`rounded flex items-center justify-center text-sm transition hover:opacity-100 cursor-default ${getCellColor(likelihood, severity, count)}`}
+                                              title={`L:${likelihood} x S:${severity} = ${likelihood * severity}`}
+                                          >
+                                              {count > 0 ? count : ''}
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          ))}
+                      </div>
+                      <div className="grid grid-cols-5 mt-2 text-center text-xs font-bold text-gray-400">
+                          <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                      </div>
+                      <div className="text-center mt-1 text-xs font-bold text-gray-400">Severity</div>
+                  </div>
+              </div>
+          </div>
+      )
+  }
+
+  const renderAnalysisDashboard = () => {
+    // 1. Filter items by date range (Closed At for closed items, Created At for open items)
+    const filteredItems = items.filter(i => {
+       const dateToCheck = i.closedAt || i.createdAt;
+       return dateToCheck >= analysisStartDate && dateToCheck <= analysisEndDate;
+    });
+
+    const totalRisks = filteredItems.filter(i => i.type === 'RISK').length;
+    const totalOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY').length;
+
+    const totalOpenRisks = filteredItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED').length;
+    const totalOpenOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED').length;
+
+    const totalClosedRisks = filteredItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED').length;
+    const totalClosedOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED').length;
+
+
+    // 2. Count Closed Risks per Section within date range
+    const closedRisksBySection: Record<string, number> = {};
+    SECTIONS.filter(s => !s.startsWith('QA')).forEach(s => closedRisksBySection[s] = 0);
+
+    filteredItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED').forEach(i => {
+       if (closedRisksBySection[i.section] !== undefined) {
+           closedRisksBySection[i.section]++;
+       }
+    });
+
+    const maxClosed = Math.max(...Object.values(closedRisksBySection), 1);
+
+    // 3. Prepare Data for Charts
+    const riskLevelData = {
+        'Low': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'LOW').length,
+        'Moderate': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'MODERATE').length,
+        'High': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'HIGH').length,
+        'Critical': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'CRITICAL').length
+    };
+
+    const sourceData: Record<string, number> = {};
+    filteredItems.forEach(i => {
+        const src = i.source || 'Unspecified';
+        sourceData[src] = (sourceData[src] || 0) + 1;
+    });
+
+    // Sort source data to keep chart clean (top 5 + others)
+    const sortedSources = Object.entries(sourceData).sort((a,b) => b[1] - a[1]);
+    const topSources = sortedSources.slice(0, 5);
+    const otherSourcesCount = sortedSources.slice(5).reduce((acc, curr) => acc + curr[1], 0);
+    const finalSourceData: Record<string, number> = {};
+    topSources.forEach(([k,v]) => finalSourceData[k] = v);
+    if (otherSourcesCount > 0) finalSourceData['Others'] = otherSourcesCount;
+
+
+    return (
+       <div className="space-y-8 animate-fadeIn">
+          {/* Filters */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
+             <div className="flex items-center gap-2 text-osmak-green-dark font-bold mb-1"><Filter size={20}/> Date Filter</div>
+             <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">From</label>
+                <input type="date" className="border rounded p-2 text-sm bg-white" value={analysisStartDate} onChange={e => setAnalysisStartDate(e.target.value)} />
+             </div>
+             <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">To</label>
+                <input type="date" className="border rounded p-2 text-sm bg-white" value={analysisEndDate} onChange={e => setAnalysisEndDate(e.target.value)} />
+             </div>
+          </div>
+
+          {/* KPI Cards Grid - 3 Columns */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* --- RISKS ROW --- */}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Total Risks Recorded</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{totalRisks}</p>
+                        <p className="text-xs text-gray-400 mt-1">Open + Closed</p>
+                    </div>
+                    <div className="bg-gray-100 p-2 rounded-lg text-gray-600"><Layers size={24}/></div>
+                  </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Active Open Risks</p>
+                        <p className="text-3xl font-bold text-orange-600 mt-2">{totalOpenRisks}</p>
+                        <p className="text-xs text-gray-400 mt-1">Requiring action/monitoring</p>
+                    </div>
+                    <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><ShieldAlert size={24}/></div>
+                  </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Closed Risks</p>
+                        <p className="text-3xl font-bold text-green-600 mt-2">{totalClosedRisks}</p>
+                        <p className="text-xs text-gray-400 mt-1">Successfully treated</p>
+                    </div>
+                    <div className="bg-green-100 p-2 rounded-lg text-green-600"><CheckCircle2 size={24}/></div>
+                  </div>
+              </div>
+
+              {/* --- OPPORTUNITIES ROW --- */}
+               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Total Opportunities</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{totalOpps}</p>
+                        <p className="text-xs text-gray-400 mt-1">Open + Closed</p>
+                    </div>
+                    <div className="bg-gray-100 p-2 rounded-lg text-gray-600"><Layers size={24}/></div>
+                  </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Active Opportunities</p>
+                        <p className="text-3xl font-bold text-blue-600 mt-2">{totalOpenOpps}</p>
+                        <p className="text-xs text-gray-400 mt-1">In progress</p>
+                    </div>
+                    <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Lightbulb size={24}/></div>
+                  </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Closed Opportunities</p>
+                        <p className="text-3xl font-bold text-teal-600 mt-2">{totalClosedOpps}</p>
+                        <p className="text-xs text-gray-400 mt-1">Realized/Concluded</p>
+                    </div>
+                    <div className="bg-teal-100 p-2 rounded-lg text-teal-600"><CheckCircle2 size={24}/></div>
+                  </div>
+              </div>
+          </div>
+
+          {/* New Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Risk Level Distribution (Donut) */}
+              <DonutChart 
+                  title="Risk Level Distribution"
+                  data={riskLevelData}
+                  colors={{
+                      'Low': '#4ade80', // green-400
+                      'Moderate': '#facc15', // yellow-400
+                      'High': '#fb923c', // orange-400
+                      'Critical': '#ef4444' // red-500
+                  }}
+              />
+
+              {/* Source Distribution (Donut) */}
+              <DonutChart 
+                  title="Entries by Source"
+                  data={finalSourceData}
+                  colors={{
+                      'Internal Audit': '#60a5fa',
+                      'Incidents': '#f87171',
+                      'Complaints': '#fbbf24',
+                      'Nonconformities': '#a78bfa',
+                      'Others': '#9ca3af'
+                  }}
+              />
+
+              {/* QA gets Heatmap, Section gets simple list or another chart? */}
+              {/* If QA View, show Heatmap. If Section View, show something else or same? */}
+              {/* The request implied enhancing 'section accounts' specifically, but 'same with qa' */}
+              {/* Let's show Heatmap for everyone as it's useful */}
+              <RiskHeatmap items={filteredItems} />
+          </div>
+
+          {/* QA-Specific Bar Chart: Closed Risks by Section */}
+          {isQA && !selectedSection && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><BarChart3 size={20}/> Closed Risks by Section</h3>
+                <div className="space-y-3">
+                    {Object.entries(closedRisksBySection).map(([sec, count]) => (
+                    <div key={sec} className="flex items-center gap-4 text-sm">
+                        <div className="w-64 text-right font-medium text-gray-600 truncate" title={sec}>{sec}</div>
+                        <div className="flex-1 h-8 bg-gray-100 rounded-full overflow-hidden relative">
+                            <div 
+                                className="h-full bg-osmak-green rounded-full transition-all duration-500 flex items-center justify-end px-2 text-white font-bold text-xs"
+                                style={{ width: `${(count / maxClosed) * 100}%` }}
+                            >
+                                {count > 0 && count}
+                            </div>
+                        </div>
+                        <div className="w-8 font-bold text-gray-700">{count}</div>
+                    </div>
+                    ))}
+                </div>
+            </div>
+          )}
+       </div>
+    );
+  };
+
+  // Helper for mobile menu selection
+  const handleViewChange = (newView: typeof view) => {
+    setView(newView);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleSectionSelect = (s: string) => {
+    setSelectedSection(s);
+    setView('DASHBOARD');
+    setIsMobileMenuOpen(false);
+  }
+
+  if (!user) return <Login onLogin={setUser} />;
+
+  return (
+    <div className="flex min-h-screen bg-gray-100 font-sans text-gray-900">
+      {/* Mobile Header Bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#009a3e] flex items-center justify-between px-4 z-40 shadow-md">
+         <div className="flex items-center gap-2">
+            <img 
+               src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" 
+               alt="Logo" 
+               className="h-8 w-auto object-contain"
+            />
+            <div className="flex flex-col">
+               <span className="text-white font-bold text-sm tracking-wide uppercase">Ospital ng Makati</span>
+               <span className="text-white text-[0.65rem] opacity-90 tracking-wide">Risk & Opportunities Registry</span>
+            </div>
+         </div>
+         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-2">
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+         </button>
+      </div>
+
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={`w-72 bg-white text-gray-800 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Updated Sidebar Header */}
+        <SidebarHeader onClose={() => setIsMobileMenuOpen(false)} />
+        
+        <div className="p-6 border-b border-gray-200 bg-gray-50">
+           <div className="text-xs uppercase text-gray-500 font-bold mb-1">Logged in as</div>
+           <div className="font-bold text-lg truncate text-osmak-green-dark">{user}</div>
+           {isQA && !selectedSection && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded text-white mt-1 inline-block">Auditor</span>}
+           {selectedSection && <button onClick={() => { setSelectedSection(null); handleViewChange('DASHBOARD'); }} className="text-xs text-yellow-600 underline mt-2 hover:text-yellow-700">Exit Section View</button>}
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
+          <button 
+             onClick={() => handleViewChange('DASHBOARD')}
+             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'DASHBOARD' ? 'bg-osmak-green text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <LayoutDashboard size={20} /> Dashboard
+          </button>
+
+          {(!isQA || selectedSection) ? (
+             <>
+                <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">Registries</div>
+                <button 
+                    onClick={() => handleViewChange('RO_LIST')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'RO_LIST' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <ClipboardList size={20} /> R&O List
+                </button>
+                {/* Data Analysis for Section Users */}
+                <button 
+                    onClick={() => handleViewChange('QA_ANALYSIS')} // Reusing the same view logic for simplicity, logic handles filtering
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'QA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <BarChart3 size={20} /> Data Analysis
+                </button>
+             </>
+          ) : (
+             <>
+                <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">QA Overview</div>
+                <button 
+                    onClick={() => handleViewChange('QA_PENDING')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'QA_PENDING' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <ClipboardList size={20} /> Pending Tasks
+                    {pendingQA.length > 0 && <span className="bg-red-500 text-white text-xs px-2 rounded-full ml-auto">{pendingQA.length}</span>}
+                </button>
+                <button 
+                    onClick={() => handleViewChange('RO_LIST')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'RO_LIST' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <ClipboardList size={20} /> R&O List
+                </button>
+                
+                <button 
+                    onClick={() => handleViewChange('QA_ANALYSIS')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'QA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <BarChart3 size={20} /> Data Analysis
+                </button>
+
+                <button 
+                    onClick={() => setIsSectionsOpen(!isSectionsOpen)}
+                    className="w-full flex items-center justify-between pt-4 pb-2 px-4 text-xs font-bold text-gray-400 uppercase hover:text-gray-600 transition group"
+                >
+                    <span>Hospital Sections</span>
+                    {isSectionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                
+                {isSectionsOpen && (
+                    <div className="space-y-1 animate-fadeIn">
+                        {SECTIONS.filter(s => !s.startsWith('QA')).map(s => (
+                            <button 
+                                key={s}
+                                onClick={() => handleSectionSelect(s)}
+                                className={`w-full flex items-start text-left gap-3 px-4 py-2 rounded-lg transition text-sm ${selectedSection === s ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                            >
+                                <Building2 size={16} className="shrink-0 mt-0.5" /> <span>{s}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+             </>
+          )}
+        </nav>
+        
+        {/* Footer Status */}
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+            <button 
+                onClick={() => setUser(null)} 
+                className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-bold py-2.5 rounded-lg hover:bg-gray-100 transition-colors shadow-sm"
+            >
+                <LogOut size={20} />
+                <span>Sign Out</span>
+            </button>
+        </div>
+      </aside>
+
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pt-20 md:pt-8 bg-[#F8FAFC]">
+        <header className="flex justify-between items-center mb-8">
+           <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                  {view === 'DASHBOARD' ? 'Dashboard' : 
+                   view === 'RO_LIST' ? 'R&O Registry List' :
+                  view.replace(/_/g, ' ')}
+              </h2>
+              {selectedSection && <p className="text-sm text-gray-500 mt-1">Viewing as: <span className="font-bold">{selectedSection}</span></p>}
+           </div>
+           
+           {(!isQA || selectedSection) && (
+             <button 
+                onClick={() => setIsWizardOpen(true)}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition transform hover:-translate-y-0.5"
+             >
+                <PlusCircle size={18} /> <span className="hidden sm:inline">New Entry</span>
+             </button>
+           )}
+        </header>
+
+        {loading ? (
+             <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-osmak-600" size={48} /></div>
+        ) : (
+           <>
+             {/* Dashboard View */}
+             {view === 'DASHBOARD' && (
+                <div className="space-y-8 animate-fadeIn">
+                   {/* Stats Cards - Redesigned */}
+                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">OPEN HIGH/CRITICAL RISKS</p>
+                            <p className="text-4xl font-bold text-red-500">{highRisks.length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-red-400">
+                            <AlertTriangle size={20}/>
+                         </div>
+                      </div>
+                      
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">TOTAL OPEN RISKS</p>
+                            <p className="text-4xl font-bold text-gray-600">{openRisks.length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center text-orange-400">
+                            <ShieldAlert size={20}/>
+                         </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">OPEN OPPORTUNITIES</p>
+                            <p className="text-4xl font-bold text-gray-600">{openOpps.length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-500">
+                            <Lightbulb size={20}/>
+                         </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">CLOSED ITEMS</p>
+                            <p className="text-4xl font-bold text-gray-600">{contextItems.filter(i => i.status === 'CLOSED').length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                            <CheckCircle2 size={20}/>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Countdown Cards for Section Users - Redesigned */}
+                   {(!isQA || selectedSection) && (() => {
+                       const upcomingRisks = openRisks
+                           .map(item => ({ item, days: getDaysRemaining(item) }))
+                           .filter(data => data.days !== null)
+                           .sort((a, b) => a.days!.days - b.days!.days)
+                           .slice(0, 4);
+
+                       if (upcomingRisks.length > 0) {
+                           return (
+                               <div className="mt-8">
+                                   <h3 className="font-bold text-gray-500 text-sm mb-4">Upcoming Deadlines</h3>
+                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                       {upcomingRisks.map(({ item, days }) => (
+                                           <div key={item.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden" onClick={() => setSelectedItem(item)}>
+                                               <div className={`text-4xl font-bold ${days!.color} mb-1`}>{days!.days < 0 ? `+${Math.abs(days!.days)}` : days!.days}</div>
+                                               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DAYS REMAINING</div>
+                                               
+                                               <div className="mt-4 pt-4 border-t border-gray-50">
+                                                   <p className="text-sm font-medium text-gray-700 truncate mb-1" title={item.description}>{item.description}</p>
+                                                   <span className="font-mono text-[10px] text-gray-300 uppercase tracking-widest">{displayIdMap[item.id] || item.id}</span>
+                                               </div>
+                                           </div>
+                                       ))}
+                                   </div>
+                               </div>
+                           );
+                       }
+                       return null;
+                   })()}
+
+                   <div className="space-y-12">
+                       <div className="space-y-4">
+                           {/* Open Risks Table Header */}
+                           <div className="flex justify-between items-end mb-2">
+                               <h3 className="font-bold text-gray-500 text-sm">Open Risks</h3>
+                               <button onClick={() => exportCSV(openRisks, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                                  <Download size={14}/> CSV
+                               </button>
+                           </div>
+                           {renderTable(openRisks, true, false, 'RISK')}
+                       </div>
+                       
+                       <div className="space-y-4">
+                           <div className="flex justify-between items-end mb-2">
+                               <h3 className="font-bold text-gray-500 text-sm">Open Opportunities</h3>
+                               <button onClick={() => exportCSV(openOpps, 'Open_Opps')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                                  <Download size={14}/> CSV
+                               </button>
+                           </div>
+                           {renderTable(openOpps, true, false, 'OPPORTUNITY')}
+                       </div>
+                   </div>
+
+                   {/* Collapsible Closed Registries for QA View */}
+                   {isQA && selectedSection && (
+                       <div className="mt-8 pt-8 border-t">
+                            <details className="group">
+                                <summary className="flex items-center gap-2 cursor-pointer text-gray-500 hover:text-gray-800 font-bold">
+                                    <ChevronRight className="group-open:rotate-90 transition"/> Closed Registries (Click to Expand)
+                                </summary>
+                                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-8 pl-6">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <h4 className="text-sm font-bold text-gray-500">Closed Risks</h4>
+                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), 'Closed_Risks')} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
+                                        </div>
+                                        {renderTable(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), false, true)}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <h4 className="text-sm font-bold text-gray-500">Closed Opportunities</h4>
+                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), 'Closed_Opps')} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
+                                        </div>
+                                        {renderTable(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), false, true)}
+                                    </div>
+                                </div>
+                            </details>
+                       </div>
+                   )}
+                </div>
+             )}
+
+            {/* Combined RO_LIST View */}
+            {view === 'RO_LIST' && (
+                <div className="space-y-4">
+                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
+                         <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><ClipboardList size={20}/> All Risks & Opportunities</h3>
+                         
+                         <div className="flex flex-wrap items-center gap-2">
+                             {/* Year Filter */}
+                             <select 
+                                value={listFilterYear}
+                                onChange={(e) => setListFilterYear(e.target.value)}
+                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
+                             >
+                                <option value="ALL">All Years</option>
+                                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                             </select>
+
+                             {/* Type Filter */}
+                             <select 
+                                value={listFilterType}
+                                onChange={(e) => setListFilterType(e.target.value as any)}
+                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
+                             >
+                                <option value="ALL">All Types</option>
+                                <option value="RISK">Risks</option>
+                                <option value="OPPORTUNITY">Opportunities</option>
+                             </select>
+
+                             {/* Status Filter */}
+                             <select 
+                                value={listFilterStatus}
+                                onChange={(e) => setListFilterStatus(e.target.value as any)}
+                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
+                             >
+                                <option value="ALL">All Status</option>
+                                <option value="OPEN">Open</option>
+                                <option value="CLOSED">Closed</option>
+                             </select>
+
+                             <button onClick={() => exportCSV(filteredROList, 'Filtered_Registry')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50">
+                                <Download size={16}/> Export
+                             </button>
+                        </div>
+                     </div>
+                     {renderTable(filteredROList, true, false, 'BOTH')}
+                </div>
+            )}
+
+             {view === 'RISKS' && (
+                 <div className="space-y-12">
+                     <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2">
+                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><ShieldAlert size={20}/> Open Risk Registry</h3>
+                            <button onClick={() => exportCSV(openRisks, 'Open_Risks')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
+                        </div>
+                        {renderTable(openRisks, true)}
+                     </div>
+
+                     <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2">
+                            <h3 className="font-bold text-lg text-gray-600 flex items-center gap-2"><History size={20}/> Closed Risk Registry</h3>
+                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), 'Closed_Risks')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
+                        </div>
+                        {renderTable(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), false, true)}
+                     </div>
+                 </div>
+             )}
+
+             {view === 'OPPORTUNITIES' && (
+                 <div className="space-y-12">
+                     <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2">
+                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Lightbulb size={20}/> Open Opportunity Registry</h3>
+                            <button onClick={() => exportCSV(openOpps, 'Open_Opps')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
+                        </div>
+                        {renderTable(openOpps, true)}
+                     </div>
+
+                     <div className="space-y-4">
+                        <div className="flex justify-between items-center border-b pb-2">
+                            <h3 className="font-bold text-lg text-gray-600 flex items-center gap-2"><History size={20}/> Closed Opportunity Registry</h3>
+                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), 'Closed_Opps')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
+                        </div>
+                        {renderTable(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), false, true)}
+                     </div>
+                 </div>
+             )}
+
+             {/* QA Global Views */}
+             {view === 'QA_PENDING' && (
+                 <div className="space-y-4">
+                     <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg text-indigo-800 text-sm mb-4">
+                         These items require your attention for <strong>Implementation Verification</strong> or <strong>Final Verification/Closure</strong>.
+                     </div>
+                     {renderTable(pendingQA, true)}
+                 </div>
+             )}
+             {view === 'QA_OPEN_RISKS' && (
+                 <div className="space-y-4">
+                     <div className="flex justify-end"><button onClick={() => exportCSV(allOpenRisks, 'Open_Risks')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button></div>
+                     {renderTable(allOpenRisks, true)}
+                 </div>
+             )}
+             {view === 'QA_OPEN_OPPS' && (
+                 <div className="space-y-4">
+                     <div className="flex justify-end"><button onClick={() => exportCSV(allOpenOpps, 'Open_Opportunities')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button></div>
+                     {renderTable(allOpenOpps, true)}
+                 </div>
+             )}
+            {view === 'QA_CLOSED_RISKS' && (() => {
+                const filteredData = items.filter(i =>
+                    i.type === 'RISK' &&
+                    i.status === 'CLOSED' &&
+                    (closedFilterSection === 'ALL' || i.section === closedFilterSection)
+                );
+                return (
+                    <div className="space-y-4">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-end">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Filter by Section</label>
+                                <select
+                                    value={closedFilterSection}
+                                    onChange={e => setClosedFilterSection(e.target.value)}
+                                    className="w-full md:w-80 rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-osmak-green-dark outline-none transition text-sm bg-white"
+                                >
+                                    <option value="" disabled>Select a section to view...</option>
+                                    <option value="ALL">All Sections</option>
+                                    {SECTIONS.filter(s => !s.startsWith('QA')).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <button
+                                onClick={() => exportCSV(filteredData, 'Closed_Risks')}
+                                disabled={!closedFilterSection || filteredData.length === 0}
+                                className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Download size={16}/> Export CSV
+                            </button>
+                        </div>
+                        {closedFilterSection !== '' && renderTable(filteredData, false, true)}
+                    </div>
+                )
+            })()}
+            {view === 'QA_CLOSED_OPPS' && (() => {
+                const filteredData = items.filter(i =>
+                    i.type === 'OPPORTUNITY' &&
+                    i.status === 'CLOSED' &&
+                    (closedFilterSection === 'ALL' || i.section === closedFilterSection)
+                );
+                return (
+                    <div className="space-y-4">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-end">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Filter by Section</label>
+                                <select
+                                    value={closedFilterSection}
+                                    onChange={e => setClosedFilterSection(e.target.value)}
+                                    className="w-full md:w-80 rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-osmak-green-dark outline-none transition text-sm bg-white"
+                                >
+                                    <option value="" disabled>Select a section to view...</option>
+                                    <option value="ALL">All Sections</option>
+                                    {SECTIONS.filter(s => !s.startsWith('QA')).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <button
+                                onClick={() => exportCSV(filteredData, 'Closed_Opportunities')}
+                                disabled={!closedFilterSection || filteredData.length === 0}
+                                className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Download size={16}/> Export CSV
+                            </button>
+                        </div>
+                        {closedFilterSection !== '' && renderTable(filteredData, false, true)}
+                    </div>
+                )
+            })()}
+
+             {/* QA Analysis View */}
+             {view === 'QA_ANALYSIS' && renderAnalysisDashboard()}
+           </>
+        )}
+      </main>
+
+      {/* Modals */}
+      {isWizardOpen && (
+        <Wizard 
+          section={user || ''} 
+          onClose={() => setIsWizardOpen(false)} 
+          onSave={handleCreate} 
+        />
+      )}
+      
+      {selectedItem && (
+        <ItemDetailModal 
+          item={selectedItem} 
+          isQA={isQA}
+          currentUser={user || ''}
+          displayId={displayIdMap[selectedItem.id] || selectedItem.id}
+          onClose={() => setSelectedItem(null)}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {selectedAuditTrailItem && (
+        <AuditTrailModal 
+          trail={selectedAuditTrailItem.auditTrail} 
+          onClose={() => setSelectedAuditTrailItem(null)} 
+          itemId={displayIdMap[selectedAuditTrailItem.id] || selectedAuditTrailItem.id}
+        />
+      )}
     </div>
   );
 };

@@ -19,7 +19,8 @@
 | **v2.0** | [Date] | **Added Section-Level Data Analysis** | To empower sections to monitor their own performance and trends without needing QA reports. | QA Head |
 | **v2.1** | [Date] | **Workflow Enhancements** | Implemented Chronological Ref IDs (R1, O1), combined R&O List, mandatory action plans for ALL risks, and improved Residual Risk Reassessment workflow. | QA Head |
 | **v2.2** | [Date] | **Streamlined Workflow** | Removed "Plan Review" step. Entries now proceed directly to "Implementation" upon submission to expedite process. | QA Head |
-| **v2.3** | [Date] | **UI/UX Optimization** | Renamed "QA Command Center" to "Auditor". Consolidated menus into "R&O List" with filters. Added scrollable tables with fixed heights. Added "Ambulatory Care Medicine Complex" to sections. | QA Head |
+| **v2.3** | [Date] | **UI/UX Optimization** | Merged menus, added R&O List filters, renamed roles, implemented scrollable tables for better navigation, and cleaned up sidebar. | QA Head |
+| **v2.4** | [Date] | **Help Resources** | Added direct links to the User Manual and Orientation Video on the Login Screen for easier access. | QA Head |
 
 ---
 *This log controls changes made during or subsequent to the design and development of products and services.*
