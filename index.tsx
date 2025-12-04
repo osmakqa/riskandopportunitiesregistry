@@ -75,6 +75,7 @@ interface ActionPlan {
   targetDate: string;
   status: ActionStatus;
   completionRemarks?: string;
+  verificationRemarks?: string; // Added for QA remarks
 }
 
 interface RegistryItem {
@@ -440,22 +441,22 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
               <h3 className="font-bold text-gray-900 text-lg">Implementation</h3>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
-              <strong>Section User</strong> executes plans immediately. For Risks, click <strong>"Reassess"</strong> to input Residual Risk values. For Opportunities, mark as Completed.
+              <strong>Section User</strong> executes plans. For Risks, click <strong>"Completed"</strong> to input Residual Risk values. For Opportunities, mark as Completed.
             </p>
             <div className="mt-auto">
               <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded">Status: FOR VERIFICATION</span>
             </div>
           </div>
 
-          {/* Step 3: Reassessment */}
+          {/* Step 3: QA Verification */}
           <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
             <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-teal-500 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">3</div>
             <div className="flex items-center gap-2 mb-3">
-              <RotateCcw className="text-teal-600" size={20} />
-              <h3 className="font-bold text-gray-900 text-lg">Reassessment</h3>
+              <ClipboardCheck className="text-teal-600" size={20} />
+              <h3 className="font-bold text-gray-900 text-lg">Verification</h3>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
-              System saves the <strong>Residual Risk</strong> data. QA verifies the action implementation and the reassessed values.
+              <strong>QA Auditor</strong> verifies actions and the Residual Risk provided by the section. QA may add verification remarks.
             </p>
             <div className="mt-auto">
               <span className="bg-teal-100 text-teal-800 text-xs font-bold px-3 py-1 rounded">Status: QA VERIFICATION</span>
@@ -470,7 +471,7 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
               <h3 className="font-bold text-gray-900 text-lg">Validation & Closure</h3>
             </div>
             <p className="text-gray-700 text-sm leading-relaxed mb-4 flex-1">
-              <strong>QA</strong> performs final review of Residual Risk or Opportunity outcome and adds closing remarks.
+              <strong>QA</strong> performs final review of effectiveness and closes the entry.
             </p>
             <div className="mt-auto">
               <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded">Status: CLOSED</span>
@@ -601,7 +602,6 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
               onChange={(e) => { setPassword(e.target.value); setError(''); }}
             />
             {error && <p className="text-red-500 text-xs mt-2 font-medium">{error}</p>}
-
           </div>
           <div className="space-y-4">
             <button type="submit" className="w-full bg-osmak-green hover:bg-osmak-green-dark text-white font-semibold py-3 rounded-lg transition shadow-md">
@@ -662,6 +662,13 @@ const ItemDetailModal = ({
     remarks: '',
     date: new Date().toISOString().split('T')[0]
   });
+  
+  // QA Verification Form State
+  const [qaVerification, setQaVerification] = useState({
+    implementation: 'IMPLEMENTED' as 'IMPLEMENTED' | 'NOT_IMPLEMENTED',
+    effectiveness: 'EFFECTIVE' as 'EFFECTIVE' | 'NOT_EFFECTIVE',
+    remarks: ''
+  });
 
   // Editing State
   const [isEditing, setIsEditing] = useState(false);
@@ -671,6 +678,7 @@ const ItemDetailModal = ({
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
   const [completingActionId, setCompletingActionId] = useState<string | null>(null);
   const [completionRemarks, setCompletionRemarks] = useState('');
+  const [delayReason, setDelayReason] = useState(''); // Justification for overdue
 
   // Delete Confirmation State
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -690,35 +698,52 @@ const ItemDetailModal = ({
     setEditData(item);
   }, [item]);
 
-  const handleActionStatusChange = (actionId: string, newStatus: ActionStatus, remarks?: string) => {
-    const updatedActions = item.actionPlans.map(ap => 
-      ap.id === actionId ? { ...ap, status: newStatus, completionRemarks: remarks || ap.completionRemarks } : ap
-    ) as ActionPlan[];
-    
-    let nextStatus = item.status;
-    let eventLog = '';
-    
-    if (isQA && item.status === 'IMPLEMENTATION') {
-      eventLog = 'Action Plan Verified as Complete';
-      const allCompleted = updatedActions.every(a => a.status === 'COMPLETED');
-      if (allCompleted) {
-         if (item.type === 'RISK') {
-            nextStatus = 'REASSESSMENT';
-         } else {
-            nextStatus = 'QA_VERIFICATION';
+  const handleVerifyAction = (actionId: string, status: 'COMPLETED' | 'REVISION_REQUIRED') => {
+      const updatedActions = item.actionPlans.map(ap => 
+        ap.id === actionId ? { ...ap, status: status } : ap
+      ) as ActionPlan[];
+      
+      let nextStatus = item.status;
+      let eventLog = '';
+      
+      if (status === 'COMPLETED') {
+         eventLog = 'Action Plan Verified as Complete';
+         // Check if ALL plans are now COMPLETED
+         const allCompleted = updatedActions.every(a => a.status === 'COMPLETED');
+         if (allCompleted) {
+             // If all completed, move to QA_VERIFICATION (Skipping REASSESSMENT by Section)
+             nextStatus = 'QA_VERIFICATION';
          }
+      } else {
+         eventLog = 'Action Plan Rejected by QA';
       }
-    }
-    
-    let updatedItem = addAuditEvent(item, eventLog, currentUser);
-    updatedItem = {...updatedItem, actionPlans: updatedActions, status: nextStatus };
-
-    onUpdate(updatedItem);
-    setCompletingActionId(null);
-    setCompletionRemarks('');
+      
+      let updatedItem = addAuditEvent(item, eventLog, currentUser);
+      updatedItem = {...updatedItem, actionPlans: updatedActions, status: nextStatus };
+  
+      onUpdate(updatedItem);
   };
 
   const handleUserMarkCompleted = (actionId: string) => {
+    const plan = item.actionPlans.find(ap => ap.id === actionId);
+    if (!plan) return;
+
+    // Check overdue logic
+    const targetDate = new Date(plan.targetDate);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const isOverdue = targetDate < today;
+
+    if (isOverdue && !delayReason.trim()) {
+        alert("This item is overdue. Please provide a reason for the delay.");
+        return;
+    }
+
+    let finalRemarks = completionRemarks;
+    if (isOverdue) {
+        finalRemarks = `[DELAY JUSTIFICATION: ${delayReason}] ${completionRemarks}`;
+    }
+
     let updatedItem = addAuditEvent(item, "Action Submitted for Verification", currentUser);
     
     // Prepare updates
@@ -736,54 +761,49 @@ const ItemDetailModal = ({
     }
 
     const updatedActions = item.actionPlans.map(ap => 
-      ap.id === actionId ? { ...ap, status: 'FOR_VERIFICATION', completionRemarks } : ap
+      ap.id === actionId ? { ...ap, status: 'FOR_VERIFICATION', completionRemarks: finalRemarks } : ap
     ) as ActionPlan[];
 
     onUpdate({ ...updatedItem, actionPlans: updatedActions, ...updates });
     setCompletingActionId(null);
     setCompletionRemarks('');
+    setDelayReason('');
   };
 
-  const handleSubmitReassessment = () => {
-    let updatedItem = addAuditEvent(item, "Residual Risk Reassessment Submitted", currentUser);
-    
-    // Auto-compute residual values
-    const rating = reassessment.likelihood * reassessment.severity;
-    const level = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
+  const handleSubmitQAVerification = () => {
+      // Determine outcome
+      if (qaVerification.implementation === 'NOT_IMPLEMENTED' || qaVerification.effectiveness === 'NOT_EFFECTIVE') {
+          // Reject Logic
+          const reason = `QA Verification Failed: Implementation=${qaVerification.implementation}, Effectiveness=${qaVerification.effectiveness}`;
+          let updatedItem = addAuditEvent(item, "QA Verification Rejected", currentUser);
+          
+          // Append remarks
+          const rejectionNote = `[QA REJECTION] ${qaVerification.remarks || 'No remarks provided.'}`;
+          const currentRemarks = item.effectivenessRemarks || '';
+          
+          onUpdate({
+              ...updatedItem,
+              status: 'IMPLEMENTATION', // Revert to Implementation for correction
+              effectivenessRemarks: currentRemarks ? `${currentRemarks}\n\n${rejectionNote}` : rejectionNote
+          });
+      } else {
+          // Success Logic
+          let updatedItem = addAuditEvent(item, "Entry Validated and Closed", currentUser);
+          const closingNote = qaVerification.remarks ? `[QA VERIFIED] ${qaVerification.remarks}` : (item.effectivenessRemarks || '');
 
-    onUpdate({
-      ...updatedItem,
-      residualLikelihood: reassessment.likelihood,
-      residualSeverity: reassessment.severity,
-      residualRiskRating: rating,
-      residualRiskLevel: level,
-      effectivenessRemarks: reassessment.remarks,
-      reassessmentDate: reassessment.date,
-      status: 'QA_VERIFICATION'
-    });
-  };
+          onUpdate({
+              ...updatedItem,
+              status: 'CLOSED',
+              effectivenessRemarks: closingNote, 
+              closedAt: new Date().toISOString().split('T')[0]
+          });
+      }
+  }
 
-
-  const handleFinalClose = () => {
-    const finalRemarks = reassessment.remarks || item.effectivenessRemarks;
-    let updatedItem = addAuditEvent(item, "Entry Validated and Closed", currentUser);
-    onUpdate({ 
-      ...updatedItem, 
-      status: 'CLOSED',
-      effectivenessRemarks: finalRemarks,
-      closedAt: new Date().toISOString().split('T')[0]
-    });
-  };
-  
   const handleRequirePlan = () => {
      alert("Please notify the section that an action plan is mandatory.");
   }
 
-  const handleRejectReassessment = () => {
-    let updatedItem = addAuditEvent(item, "Reassessment Rejected", currentUser);
-    onUpdate({ ...updatedItem, status: 'REASSESSMENT' });
-  };
-  
   const handleReopen = () => {
       const updatedItem = addAuditEvent(item, "Entry Reopened", currentUser);
       onUpdate({ ...updatedItem, status: 'IMPLEMENTATION', closedAt: undefined });
@@ -852,6 +872,14 @@ const ItemDetailModal = ({
   const strategies = item.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
   // Allow edit in IMPLEMENTATION since PLAN_REVIEW is removed
   const canEdit = !isQA && item.status === 'IMPLEMENTATION';
+
+  const isPlanOverdue = (plan: ActionPlan) => {
+    if (plan.status === 'COMPLETED' || plan.status === 'FOR_VERIFICATION') return false; 
+    const target = new Date(plan.targetDate);
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    return target < now;
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -1012,45 +1040,81 @@ const ItemDetailModal = ({
                   <Activity size={18} /> Scoring & Level
                 </h3>
                 {item.type === 'RISK' ? (
-                  <div className="flex gap-4">
-                     <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
-                        <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
-                        {isEditing ? (
-                           <>
-                             <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.likelihood} onChange={e => updateEditRisk(parseInt(e.target.value), editData.severity || 1)} />
-                             <div className="text-xl font-bold text-osmak-800 mt-1">{editData.likelihood}</div>
-                           </>
-                        ) : (
-                           <div className="text-2xl font-bold text-gray-900">{item.likelihood}</div>
-                        )}
-                        <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[(isEditing ? editData.likelihood : item.likelihood) || 1]}</div>
-                     </div>
-                     
-                     <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
-                        <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
-                        {isEditing ? (
-                           <>
-                             <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.severity} onChange={e => updateEditRisk(editData.likelihood || 1, parseInt(e.target.value))} />
-                             <div className="text-xl font-bold text-osmak-800 mt-1">{editData.severity}</div>
-                           </>
-                        ) : (
-                           <div className="text-2xl font-bold text-gray-900">{item.severity}</div>
-                        )}
-                        <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[(isEditing ? editData.severity : item.severity) || 1]}</div>
-                     </div>
+                  <div className="space-y-6">
+                    {/* Initial Risk Block */}
+                    <div>
+                        {(item.residualLikelihood || 0) > 0 && <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Initial Assessment</h4>}
+                        <div className="flex gap-4">
+                             <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+                                <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
+                                {isEditing ? (
+                                   <>
+                                     <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.likelihood} onChange={e => updateEditRisk(parseInt(e.target.value), editData.severity || 1)} />
+                                     <div className="text-xl font-bold text-osmak-800 mt-1">{editData.likelihood}</div>
+                                   </>
+                                ) : (
+                                   <div className="text-2xl font-bold text-gray-900">{item.likelihood}</div>
+                                )}
+                                <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[(isEditing ? editData.likelihood : item.likelihood) || 1]}</div>
+                             </div>
+                             
+                             <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+                                <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
+                                {isEditing ? (
+                                   <>
+                                     <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.severity} onChange={e => updateEditRisk(editData.likelihood || 1, parseInt(e.target.value))} />
+                                     <div className="text-xl font-bold text-osmak-800 mt-1">{editData.severity}</div>
+                                   </>
+                                ) : (
+                                   <div className="text-2xl font-bold text-gray-900">{item.severity}</div>
+                                )}
+                                <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[(isEditing ? editData.severity : item.severity) || 1]}</div>
+                             </div>
 
-                     <div className="flex-1 p-4 rounded-lg text-center border-2 border-gray-100 flex flex-col justify-center items-center">
-                        <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Risk Rating</span>
-                        <div className={`text-3xl font-bold ${
-                           (isEditing ? editData.riskLevel : item.riskLevel) === 'CRITICAL' ? 'text-red-600' : 
-                           (isEditing ? editData.riskLevel : item.riskLevel) === 'HIGH' ? 'text-orange-500' : 'text-gray-800'
-                        }`}>
-                          {isEditing ? editData.riskRating : item.riskRating}
+                             <div className="flex-1 p-4 rounded-lg text-center border-2 border-gray-100 flex flex-col justify-center items-center">
+                                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Risk Rating</span>
+                                <div className={`text-3xl font-bold ${
+                                   (isEditing ? editData.riskLevel : item.riskLevel) === 'CRITICAL' ? 'text-red-600' : 
+                                   (isEditing ? editData.riskLevel : item.riskLevel) === 'HIGH' ? 'text-orange-500' : 'text-gray-800'
+                                }`}>
+                                  {isEditing ? editData.riskRating : item.riskRating}
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(isEditing ? editData.riskLevel : item.riskLevel)}`}>
+                                    {isEditing ? editData.riskLevel : item.riskLevel}
+                                </span>
+                             </div>
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(isEditing ? editData.riskLevel : item.riskLevel)}`}>
-                            {isEditing ? editData.riskLevel : item.riskLevel}
-                        </span>
-                     </div>
+                    </div>
+
+                    {/* Residual Risk Block */}
+                    {(item.residualLikelihood || 0) > 0 && (
+                        <div>
+                             <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 border-t pt-4">Residual Assessment</h4>
+                             <div className="flex gap-4">
+                                 <div className="flex-1 bg-amber-50 p-4 rounded-lg text-center border border-amber-100">
+                                    <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
+                                    <div className="text-2xl font-bold text-gray-900">{item.residualLikelihood}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[item.residualLikelihood || 1]}</div>
+                                 </div>
+                                 
+                                 <div className="flex-1 bg-amber-50 p-4 rounded-lg text-center border border-amber-100">
+                                    <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
+                                    <div className="text-2xl font-bold text-gray-900">{item.residualSeverity}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[item.residualSeverity || 1]}</div>
+                                 </div>
+
+                                 <div className="flex-1 p-4 rounded-lg text-center border-2 border-amber-100 flex flex-col justify-center items-center bg-white">
+                                    <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Residual Rating</span>
+                                    <div className="text-3xl font-bold text-gray-800">
+                                      {item.residualRiskRating}
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(item.residualRiskLevel)}`}>
+                                        {item.residualRiskLevel}
+                                    </span>
+                                 </div>
+                              </div>
+                        </div>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-green-50 p-4 rounded-lg text-green-800 text-sm">
@@ -1088,7 +1152,9 @@ const ItemDetailModal = ({
                 <tbody className="divide-y">
                   {item.actionPlans.length === 0 ? (
                     <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No action plans recorded.</td></tr>
-                  ) : item.actionPlans.map(ap => (
+                  ) : item.actionPlans.map(ap => {
+                    const overdue = isPlanOverdue(ap);
+                    return (
                     <React.Fragment key={ap.id}>
                       <tr className="hover:bg-gray-50 transition">
                         <td className="px-4 py-3 text-xs font-bold uppercase text-gray-600 align-top pt-4">{ap.strategy}</td>
@@ -1099,10 +1165,18 @@ const ItemDetailModal = ({
                               <span className="font-bold">Completion Remarks:</span> {ap.completionRemarks}
                             </div>
                           )}
+                          {ap.verificationRemarks && (
+                            <div className="mt-2 text-xs bg-indigo-50 p-2 rounded text-indigo-800 border border-indigo-100">
+                              <span className="font-bold">QA Notes:</span> {ap.verificationRemarks}
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-600 align-top pt-4 italic">{ap.evidence}</td>
                         <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.responsiblePerson}</td>
-                        <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.targetDate}</td>
+                        <td className={`px-4 py-3 align-top pt-4 ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                            {ap.targetDate}
+                            {overdue && <span className="block text-[10px] text-red-500">(Overdue)</span>}
+                        </td>
                         <td className="px-4 py-3 align-top pt-4">
                           <span className={`px-2 py-1 rounded-full text-xs font-bold ${
                             ap.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
@@ -1111,14 +1185,28 @@ const ItemDetailModal = ({
                             ap.status === 'FOR_VERIFICATION' ? 'bg-purple-100 text-purple-800' :
                             'bg-yellow-100 text-yellow-800'
                           }`}>{ap.status === 'FOR_VERIFICATION' ? 'FOR VERIFICATION' : ap.status.replace('_', ' ')}</span>
+                          {overdue && <span className="ml-2 px-1.5 py-0.5 bg-red-600 text-white text-[10px] rounded font-bold">OVERDUE</span>}
                         </td>
                         <td className="px-4 py-3 text-right align-top pt-4">
                           {isQA ? (
-                            <div className="flex flex-col gap-2 items-end">
+                            <div className="flex flex-row gap-2 justify-end">
                               {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_VERIFICATION' && (
-                                <button onClick={() => handleActionStatusChange(ap.id, 'COMPLETED')} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700 shadow-sm flex items-center gap-1">
-                                  <CheckCircle2 size={12} /> Verify Completion
-                                </button>
+                                <>
+                                  <button 
+                                      onClick={() => handleVerifyAction(ap.id, 'COMPLETED')} 
+                                      className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 shadow-sm"
+                                      title="Verify Complete"
+                                  >
+                                    <CheckCircle2 size={16} />
+                                  </button>
+                                  <button 
+                                      onClick={() => handleVerifyAction(ap.id, 'REVISION_REQUIRED')} 
+                                      className="bg-red-500 text-white p-1.5 rounded hover:bg-red-600 shadow-sm"
+                                      title="Return for Revision"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </>
                               )}
                               {item.status === 'IMPLEMENTATION' && ap.status === 'APPROVED' && (
                                 <span className="text-xs text-gray-400 italic">Waiting for user...</span>
@@ -1135,6 +1223,7 @@ const ItemDetailModal = ({
                                 <button 
                                     onClick={() => {
                                         setCompletingActionId(ap.id);
+                                        setDelayReason(''); // Reset reason when opening
                                         // Initialize reassessment values for the expansion row
                                         if (item.type === 'RISK') {
                                             setReassessment(prev => ({
@@ -1146,21 +1235,44 @@ const ItemDetailModal = ({
                                     }} 
                                     className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm"
                                 >
-                                  {item.type === 'RISK' ? 'Reassess' : 'Mark Completed'}
+                                  Completed
                                 </button>
                               )}
                             </>
                           )}
                         </td>
                       </tr>
+                      
                       {completingActionId === ap.id && (
                         <tr>
                           <td colSpan={7} className="px-4 py-4 bg-green-50">
                             <div className="flex flex-col gap-4">
+                                {isPlanOverdue(ap) && (
+                                    <div className="bg-red-50 p-4 rounded-lg border border-red-200 mb-2">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="text-red-500 mt-1" size={20} />
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-red-800 text-sm mb-2">Action Plan Overdue</h4>
+                                                <p className="text-xs text-red-700 mb-3">
+                                                    The target date ({ap.targetDate}) has passed. A justification is required to proceed.
+                                                </p>
+                                                <label className="block text-xs font-bold text-red-800 mb-1">Reason for Delay (Required)</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-red-300 focus:ring-2 focus:ring-red-500 outline-none"
+                                                    placeholder="Why was the target date missed?"
+                                                    value={delayReason}
+                                                    onChange={e => setDelayReason(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {item.type === 'RISK' && (
                                     <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
                                         <h4 className="font-bold text-green-800 text-sm mb-3 border-b pb-2 flex items-center gap-2">
-                                            <Activity size={16}/> Proposed Residual Risk Assessment
+                                            <Activity size={16}/> Residual Risk Assessment
                                         </h4>
                                         <div className="flex items-center gap-6">
                                             <div className="flex-1">
@@ -1213,12 +1325,13 @@ const ItemDetailModal = ({
                                 </div>
                                 <button 
                                     onClick={() => handleUserMarkCompleted(ap.id)}
-                                    className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50"
+                                    disabled={isPlanOverdue(ap) && !delayReason.trim()}
+                                    className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Submit for Verification
                                 </button>
                                 <button 
-                                    onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); }}
+                                    onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); setDelayReason(''); }}
                                     className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300"
                                 >
                                     Cancel
@@ -1229,7 +1342,7 @@ const ItemDetailModal = ({
                         </tr>
                       )}
                     </React.Fragment>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
@@ -1365,127 +1478,107 @@ const ItemDetailModal = ({
               )}
           </div>
         
-            {/* --- RESIDUAL RISK REASSESSMENT BLOCK --- */}
-            {item.status === 'REASSESSMENT' && item.type === 'RISK' && !isQA && (
-              <div className="space-y-6 animate-fadeIn bg-white p-6 rounded-xl border border-amber-200 shadow-sm mt-4">
-                <div className="flex items-center gap-2 border-b border-amber-100 pb-3">
-                    <div className="bg-amber-100 p-2 rounded-lg text-amber-600"><Activity size={20}/></div>
-                    <h3 className="font-bold text-lg text-gray-800">Residual Risk Reassessment</h3>
-                </div>
-                <p className="text-sm text-gray-600">
-                    Now that action plans are verified, please re-evaluate the risk to determine the <strong>Residual Risk</strong>.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Residual Likelihood (1-5)</label>
-                            <div className="flex items-center gap-4">
-                                <input 
-                                    type="range" min="1" max="5" 
-                                    value={reassessment.likelihood} 
-                                    onChange={(e) => setReassessment({...reassessment, likelihood: parseInt(e.target.value)})}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                                />
-                                <span className="font-bold text-lg text-gray-700 w-8 text-center">{reassessment.likelihood}</span>
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[reassessment.likelihood]}</div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Residual Severity (1-5)</label>
-                            <div className="flex items-center gap-4">
-                                <input 
-                                    type="range" min="1" max="5" 
-                                    value={reassessment.severity} 
-                                    onChange={(e) => setReassessment({...reassessment, severity: parseInt(e.target.value)})}
-                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                                />
-                                <span className="font-bold text-lg text-gray-700 w-8 text-center">{reassessment.severity}</span>
-                            </div>
-                             <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[reassessment.severity]}</div>
-                        </div>
-                    </div>
-
-                    {/* Calculated Result Display */}
-                    <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center border border-gray-200">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Calculated Residual Risk</span>
-                        <div className="text-5xl font-bold text-gray-800 mb-2">{reassessmentRiskRating}</div>
-                        <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wide ${getLevelPillColor(reassessmentRiskLevel)}`}>
-                          {reassessmentRiskLevel}
-                        </span>
-                    </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Completion / Effectiveness Remarks</label>
-                  <textarea 
-                    className="w-full border rounded-lg p-3 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-amber-500 outline-none" 
-                    rows={3}
-                    placeholder="Describe why the risk level has changed (or why it hasn't)..."
-                    value={reassessment.remarks} 
-                    onChange={e => setReassessment({...reassessment, remarks: e.target.value})} 
-                  />
-                </div>
-                
-                <button 
-                    onClick={handleSubmitReassessment} 
-                    disabled={!reassessment.remarks}
-                    className="w-full bg-amber-500 text-white py-3 rounded-lg font-bold hover:bg-amber-600 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Submit for QA Verification
-                </button>
-              </div>
-            )}
-
             {/* --- QA Verification & Closure Block --- */}
             {item.status === 'QA_VERIFICATION' && isQA && (
               <div className="space-y-4 bg-indigo-50 p-6 rounded-xl border border-indigo-100 mt-4">
-                 {item.type === 'RISK' ? (
-                   <>
-                    <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm">
-                        <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><CheckCircle2 size={18}/> Reassessment Data Submitted</h4>
-                        <div className="grid grid-cols-2 gap-4 text-sm mt-2">
+                 <h4 className="font-bold text-indigo-900 flex items-center gap-2 text-lg">
+                    <CheckCircle2 size={24}/> QA Verification & Closure
+                 </h4>
+                 
+                 {item.type === 'RISK' && (
+                    <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm mb-4">
+                        <h5 className="font-bold text-gray-800 text-sm mb-3">User's Residual Risk Assessment</h5>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                                <span className="block text-xs text-gray-500 uppercase">Residual Rating</span>
-                                <span className="font-bold text-gray-800 text-lg">{item.residualRiskRating} ({item.residualRiskLevel})</span>
-                            </div>
-                            <div>
-                                <span className="block text-xs text-gray-500 uppercase">Input</span>
+                                <span className="block text-xs text-gray-500 uppercase">Input Scores</span>
                                 <span className="text-gray-600">Likelihood: {item.residualLikelihood} × Severity: {item.residualSeverity}</span>
                             </div>
+                            <div>
+                                <span className="block text-xs text-gray-500 uppercase">Residual Rating</span>
+                                <span className="font-bold text-gray-800">{item.residualRiskRating} ({item.residualRiskLevel})</span>
+                            </div>
                         </div>
-                        <div className="mt-3 pt-3 border-t border-gray-100">
-                            <span className="block text-xs text-gray-500 uppercase mb-1">Remarks</span>
-                            <p className="text-gray-700 italic">"{item.effectivenessRemarks}"</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-4 pt-2">
-                        <button onClick={handleRejectReassessment} className="flex-1 border border-red-300 text-red-700 py-3 rounded-lg font-bold hover:bg-red-50 flex items-center justify-center gap-2 transition">
-                          <RotateCcw size={16} /> Reject & Request Re-Eval
-                        </button>
-                        <button onClick={handleFinalClose} className="flex-[2] bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-md transition">
-                          Verify & Close Registry Entry
-                        </button>
-                    </div>
-                   </>
-                 ) : (
-                    <div className="space-y-4">
-                       <h4 className="font-bold text-indigo-900 border-b border-indigo-100 pb-2">Final Opportunity Review</h4>
-                       <p className="text-sm text-gray-600">All actions for this opportunity have been verified. Please add remarks and close.</p>
-                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">QA Remarks</label>
-                          <textarea 
-                            className="w-full border rounded-lg p-3 h-24 bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                            placeholder="Final remarks on the opportunity outcome..."
-                            value={reassessment.remarks} 
-                            onChange={e => setReassessment({...reassessment, remarks: e.target.value})} 
-                          />
-                       </div>
-                       <button onClick={handleFinalClose} className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 shadow-md transition">
-                          Close Opportunity
-                       </button>
                     </div>
                  )}
+
+                 <div className="space-y-4 bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div>
+                             <label className="block text-xs font-bold text-gray-600 uppercase mb-2">Implementation Verification</label>
+                             <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="implementation" value="IMPLEMENTED"
+                                        checked={qaVerification.implementation === 'IMPLEMENTED'}
+                                        onChange={() => setQaVerification({...qaVerification, implementation: 'IMPLEMENTED'})}
+                                        className="accent-indigo-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Implemented</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="implementation" value="NOT_IMPLEMENTED"
+                                        checked={qaVerification.implementation === 'NOT_IMPLEMENTED'}
+                                        onChange={() => setQaVerification({...qaVerification, implementation: 'NOT_IMPLEMENTED'})}
+                                        className="accent-red-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Not Implemented</span>
+                                </label>
+                             </div>
+                         </div>
+                         
+                         <div>
+                             <label className="block text-xs font-bold text-gray-600 uppercase mb-2">Effectiveness Verification</label>
+                             <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="effectiveness" value="EFFECTIVE"
+                                        checked={qaVerification.effectiveness === 'EFFECTIVE'}
+                                        onChange={() => setQaVerification({...qaVerification, effectiveness: 'EFFECTIVE'})}
+                                        className="accent-indigo-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Effective</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="effectiveness" value="NOT_EFFECTIVE"
+                                        checked={qaVerification.effectiveness === 'NOT_EFFECTIVE'}
+                                        onChange={() => setQaVerification({...qaVerification, effectiveness: 'NOT_EFFECTIVE'})}
+                                        className="accent-red-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Not Effective</span>
+                                </label>
+                             </div>
+                         </div>
+                     </div>
+
+                     <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-2">Final Remarks</label>
+                        <textarea 
+                           className="w-full border rounded-lg p-3 text-sm bg-gray-50 text-gray-900 border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                           placeholder="Enter remarks regarding implementation evidence and effectiveness..."
+                           rows={3}
+                           value={qaVerification.remarks} 
+                           onChange={e => setQaVerification({...qaVerification, remarks: e.target.value})} 
+                        />
+                     </div>
+                     
+                     <div className="pt-2">
+                        <button 
+                            onClick={handleSubmitQAVerification}
+                            className={`w-full py-3 rounded-lg font-bold shadow-md transition flex items-center justify-center gap-2 ${
+                                qaVerification.implementation === 'NOT_IMPLEMENTED' || qaVerification.effectiveness === 'NOT_EFFECTIVE'
+                                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                            }`}
+                        >
+                            {qaVerification.implementation === 'NOT_IMPLEMENTED' || qaVerification.effectiveness === 'NOT_EFFECTIVE'
+                             ? 'Reject & Revert to Implementation'
+                             : 'Verify Completion & Close Entry'
+                            }
+                        </button>
+                     </div>
+                 </div>
               </div>
             )}
 
@@ -1499,7 +1592,7 @@ const ItemDetailModal = ({
                 {item.effectivenessRemarks && (
                    <div className="bg-white p-4 border border-gray-200 rounded-lg text-sm text-gray-600 ml-8 shadow-sm">
                       <strong className="block text-gray-800 mb-1">Final Remarks / Effectiveness:</strong> 
-                      {item.effectivenessRemarks}
+                      <div className="whitespace-pre-wrap">{item.effectivenessRemarks}</div>
                       {item.type === 'RISK' && item.residualRiskRating && (
                          <div className="mt-3 pt-3 border-t border-gray-100 flex gap-4">
                              <div>
@@ -2160,14 +2253,14 @@ const App = () => {
     });
   }, [contextItems, listFilterYear, listFilterStatus, listFilterType]);
 
-  const renderTable = (data: RegistryItem[], showDays = false, isClosed = false, type: EntryType | 'BOTH' = 'RISK') => {
+  const renderTable = (data: RegistryItem[], showDays = false, isClosed = false, type: EntryType | 'BOTH' = 'RISK', maxHeight?: string) => {
     const sortedData = sortItems(data);
     
     return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col`}>
       {/* Table Header with Export Link for Open Risks on Dashboard */}
       {view === 'DASHBOARD' && !isClosed && type === 'RISK' && (
-          <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b">
+          <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b shrink-0">
               <h3 className="font-bold text-gray-700">Open Risks</h3>
               <button onClick={() => exportCSV(data, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
                   <Download size={14}/> CSV
@@ -2175,40 +2268,40 @@ const App = () => {
           </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-gray-500 font-medium border-b">
+      <div className={`overflow-x-auto ${maxHeight ? `${maxHeight} overflow-y-auto` : ''}`}>
+        <table className="w-full text-left text-sm relative">
+          <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0 z-10 shadow-sm">
             <tr>
               <th 
-                className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
                 onClick={() => handleSort('createdAt')}
               >
                   <div className="flex items-center gap-1">Ref # <ArrowUpDown size={14} className={sortField === 'createdAt' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
               <th 
-                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
                   onClick={() => handleSort('dateIdentified')}
               >
                   <div className="flex items-center gap-1">Date <ArrowUpDown size={14} className={sortField === 'dateIdentified' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
-              <th className="px-6 py-4 w-1/3">Description</th>
+              <th className="px-6 py-4 w-1/3 min-w-[200px]">Description</th>
               <th 
-                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
                   onClick={() => handleSort('status')}
               >
                   <div className="flex items-center gap-1">Status <ArrowUpDown size={14} className={sortField === 'status' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
               {type === 'BOTH' ? (
-                <th className="px-6 py-4">Type</th>
+                <th className="px-6 py-4 whitespace-nowrap">Type</th>
               ) : null}
               <th 
-                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition"
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
                   onClick={() => handleSort('riskLevel')}
               >
                   <div className="flex items-center gap-1">Level / Feasibility <ArrowUpDown size={14} className={sortField === 'riskLevel' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
-              {showDays && <th className="px-6 py-4">Target</th>}
-              <th className="px-6 py-4 text-center">History</th>
+              {showDays && <th className="px-6 py-4 whitespace-nowrap">Target</th>}
+              <th className="px-6 py-4 text-center whitespace-nowrap">History</th>
               <th className="px-6 py-4"></th>
             </tr>
           </thead>
@@ -2220,27 +2313,27 @@ const App = () => {
               const refId = displayIdMap[item.id] || item.id;
               return (
                 <tr key={item.id} className="hover:bg-gray-50 transition group">
-                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-mono text-xs text-gray-500 font-bold cursor-pointer group-hover:text-gray-800">
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-mono text-xs text-gray-500 font-bold cursor-pointer group-hover:text-gray-800 align-top">
                       {refId}
                   </td>
-                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-gray-600 text-xs cursor-pointer">
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-gray-600 text-xs cursor-pointer align-top whitespace-nowrap">
                       {item.dateIdentified}
                       <div className="text-[10px] text-gray-300 mt-0.5">DATE</div>
                   </td>
-                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-medium text-gray-800 text-sm cursor-pointer">{item.description}</td>
-                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${getPillColor(item.status)}`}>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-medium text-gray-800 text-sm cursor-pointer align-top">{item.description}</td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${getPillColor(item.status)}`}>
                       {formatStatus(item.status)}
                     </span>
                   </td>
                   {type === 'BOTH' ? (
-                    <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                    <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
                       <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${item.type === 'RISK' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
                         {item.type}
                       </span>
                     </td>
                   ) : null}
-                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
                      {item.type === 'RISK' ? (
                         <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide ${getLevelPillColor(item.riskLevel)}`}>{item.riskLevel}</span>
                      ) : (
@@ -2248,7 +2341,7 @@ const App = () => {
                      )}
                   </td>
                   {showDays && (
-                      <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer">
+                      <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top whitespace-nowrap">
                           {days ? (
                               <div className="flex flex-col">
                                   <span className={`text-xs font-bold ${days.days < 0 ? 'text-red-500' : 'text-orange-500'}`}>
@@ -2260,7 +2353,7 @@ const App = () => {
                           )}
                       </td>
                   )}
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-6 py-4 text-center align-top">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -2272,7 +2365,7 @@ const App = () => {
                       <RotateCcw size={16} />
                     </button>
                   </td>
-                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-right cursor-pointer">
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-right cursor-pointer align-top">
                     <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500" />
                   </td>
                 </tr>
@@ -2869,7 +2962,7 @@ const App = () => {
                                   <Download size={14}/> CSV
                                </button>
                            </div>
-                           {renderTable(openRisks, true, false, 'RISK')}
+                           {renderTable(openRisks, true, false, 'RISK', 'max-h-[350px]')}
                        </div>
                        
                        <div className="space-y-4">
@@ -2879,7 +2972,7 @@ const App = () => {
                                   <Download size={14}/> CSV
                                </button>
                            </div>
-                           {renderTable(openOpps, true, false, 'OPPORTUNITY')}
+                           {renderTable(openOpps, true, false, 'OPPORTUNITY', 'max-h-[350px]')}
                        </div>
                    </div>
 
@@ -2956,7 +3049,7 @@ const App = () => {
                              </button>
                         </div>
                      </div>
-                     {renderTable(filteredROList, true, false, 'BOTH')}
+                     {renderTable(filteredROList, true, false, 'BOTH', 'max-h-[500px]')}
                 </div>
             )}
 
