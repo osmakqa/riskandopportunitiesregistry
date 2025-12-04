@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI, Type } from "@google/genai";
 import { 
   ShieldAlert, 
   Lightbulb, 
@@ -43,7 +44,9 @@ import {
   BarChart3,
   Filter,
   X,
-  Video
+  Video,
+  Sparkles,
+  Bot
 } from 'lucide-react';
 
 // --- Supabase Configuration ---
@@ -1624,11 +1627,15 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
     dateIdentified: new Date().toISOString().split('T')[0]
   });
   
+  // AI State
+  const [isRefining, setIsRefining] = useState(false);
+  const [isGeneratingPlans, setIsGeneratingPlans] = useState(false);
+
   // Step 3 State
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
 
   const isMandatoryAction = true;
-  const canSubmit = isMandatoryAction ? data.actionPlans?.length > 0 : true;
+  const canSubmit = isMandatoryAction ? (data.actionPlans?.length ?? 0) > 0 : true;
 
   const strategies = data.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
 
@@ -1681,6 +1688,88 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
       riskRating: l * s,
       riskLevel: calculateRiskLevel(l, s)
     }));
+  };
+
+  // --- AI Features ---
+  const handleRefineDescription = async () => {
+     if (!data.description?.trim()) return;
+     setIsRefining(true);
+     try {
+         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const prompt = `Rewrite the following text into a formal, professional, ISO 9001 compliant description for a hospital Risk & Opportunities Registry. Keep it concise but specific. Avoid first-person phrasing.
+         
+         Context: "${data.description}"`;
+         
+         const response = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt
+         });
+         
+         const refinedText = response.text.trim();
+         // Remove quotes if the model adds them
+         const cleanText = refinedText.replace(/^"|"$/g, '');
+         setData(prev => ({ ...prev, description: cleanText }));
+     } catch (e) {
+         console.error("AI Refine Error:", e);
+         alert("Failed to refine description. Please check your internet connection.");
+     } finally {
+         setIsRefining(false);
+     }
+  };
+
+  const handleGenerateActionPlans = async () => {
+     if (!data.description) return;
+     setIsGeneratingPlans(true);
+     try {
+         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const prompt = `Generate 3 specific action plans for a hospital risk registry based on this description: "${data.description}" and type "${data.type}". 
+         Return JSON format. 
+         The targetDate should be 2 weeks from today (${new Date().toISOString().split('T')[0]}).
+         The strategy must be one of: ${Object.keys(strategies).join(', ')}.`;
+
+         const response = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt,
+             config: {
+                 responseMimeType: 'application/json',
+                 responseSchema: {
+                     type: Type.ARRAY,
+                     items: {
+                         type: Type.OBJECT,
+                         properties: {
+                             strategy: { type: Type.STRING },
+                             description: { type: Type.STRING },
+                             evidence: { type: Type.STRING },
+                             responsiblePerson: { type: Type.STRING },
+                             targetDate: { type: Type.STRING }
+                         }
+                     }
+                 }
+             }
+         });
+         
+         const plans = JSON.parse(response.text.trim());
+         if (Array.isArray(plans)) {
+             const newPlans: ActionPlan[] = plans.map((p: any) => ({
+                 id: `AP-${Date.now()}-${Math.random()}`,
+                 strategy: p.strategy,
+                 description: p.description,
+                 evidence: p.evidence,
+                 responsiblePerson: p.responsiblePerson,
+                 targetDate: p.targetDate,
+                 status: 'APPROVED'
+             }));
+             setData(prev => ({
+                 ...prev,
+                 actionPlans: [...(prev.actionPlans || []), ...newPlans]
+             }));
+         }
+     } catch (e) {
+         console.error("AI Action Plan Error:", e);
+         alert("Failed to generate action plans. Please try again.");
+     } finally {
+         setIsGeneratingPlans(false);
+     }
   };
 
   return (
@@ -1762,7 +1851,17 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase">Description</label>
+                    <button 
+                        onClick={handleRefineDescription}
+                        disabled={!data.description || isRefining}
+                        className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 disabled:opacity-50 transition"
+                    >
+                        {isRefining ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} 
+                        Refine with AI
+                    </button>
+                </div>
                 <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.description || ''} onChange={e => setData({...data, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
               </div>
             </div>
@@ -1841,7 +1940,18 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
 
           {step === 3 && (
             <div className="space-y-6 animate-fadeIn">
-               <h3 className="font-bold text-lg text-gray-800">3. Action Planning</h3>
+               <div className="flex justify-between items-center">
+                   <h3 className="font-bold text-lg text-gray-800">3. Action Planning</h3>
+                   <button 
+                       onClick={handleGenerateActionPlans}
+                       disabled={isGeneratingPlans || !data.description}
+                       className="text-xs flex items-center gap-1 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-100 hover:bg-purple-100 transition shadow-sm font-bold disabled:opacity-50"
+                   >
+                       {isGeneratingPlans ? <Loader2 size={14} className="animate-spin"/> : <Bot size={14}/>}
+                       Suggest Action Plans
+                   </button>
+               </div>
+               
                {isMandatoryAction ? (
                    <div className="bg-blue-50 text-blue-800 p-3 rounded text-sm mb-4 flex items-center gap-2">
                       <Info size={16} /> Action Plan is <strong>MANDATORY</strong> for this entry.
@@ -1855,7 +1965,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                {/* List Added Actions */}
                <div className="space-y-3">
                   {data.actionPlans?.map((plan, idx) => (
-                      <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start">
+                      <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start animate-fadeIn">
                           <div>
                               <span className="text-xs font-bold uppercase text-gray-500">{plan.strategy}</span>
                               <p className="font-medium text-sm text-gray-900">{plan.description}</p>
