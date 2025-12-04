@@ -66,25 +66,32 @@ Directly from the **Login Screen**, you can access the following resources:
 ### **E. Implementation & Evidence**
 1.  Once submitted, the status is `IMPLEMENTATION`. Proceed to execute your action plans.
 2.  Open the entry and scroll to **Action Plans**.
-3.  **For Risks**: Click the **"Reassess"** button next to the specific action.
-    *   A "Proposed Residual Risk Assessment" panel will appear.
-    *   Adjust the **Residual Likelihood** and **Residual Severity** sliders based on the action taken.
+3.  **For Risks**: Click the **"Completed"** button next to the specific action.
+    *   A **"Residual Risk Assessment"** panel will appear.
+    *   Adjust the **Residual Likelihood** and **Residual Severity** sliders based on the result of your action.
     *   The system will automatically calculate the new Residual Rating and Level.
-4.  **For Opportunities**: Click "Mark Completed".
-5.  **Completion Remarks**: These are now optional but recommended to provide context on the action taken.
+4.  **For Opportunities**: Click "Completed".
+5.  **Completion Remarks**: Provide context on the action taken (Optional).
 6.  Click "Submit for Verification".
 
-### **F. Risk Reassessment**
-1.  For Risks, once *all* action plans are verified by QA, the status changes to `REASSESSMENT`.
-2.  Open the entry.
-3.  Review and confirm the **Residual Risk** score.
-4.  Add **Remarks on Effectiveness** and submit for QA Verification.
+### **F. Handling Overdue Items**
+*   If an action plan's **Target Date** has passed:
+    *   The date will appear in **Red** in the table with an **"OVERDUE"** badge.
+    *   When you mark it as "Completed", the system will require a **Reason for Delay**.
+    *   You **cannot** submit the completion without providing this justification. This ensures compliance with ISO audit requirements.
 
-### **G. Viewing the Audit Trail**
+### **G. QA Verification Process**
+1.  Once you submit an action as completed, its status becomes `FOR VERIFICATION`.
+2.  If all actions in an entry are completed, the entry waits for **QA Verification**.
+3.  **QA Decision**:
+    *   **Verified**: If QA confirms implementation and effectiveness, the entry is **CLOSED**.
+    *   **Rejected**: If QA marks it as "Not Implemented" or "Not Effective", the entry reverts to `IMPLEMENTATION` status. You must review the QA remarks, address the issue, and re-submit.
+
+### **H. Viewing the Audit Trail**
 *   In any registry table, click the **History (clock) icon** in the row of a specific item.
 *   This opens a timeline view showing exactly who created, edited, approved, or closed the entry and when.
 
-### **H. Data Analysis (Your Section)**
+### **I. Data Analysis (Your Section)**
 *   Navigate to the **"Data Analysis"** menu item in your sidebar.
 *   This dashboard provides charts that visualize your section's performance.
 *   You can filter the data by a specific date range.
@@ -100,8 +107,17 @@ Directly from the **Login Screen**, you can access the following resources:
 
 ### **A. Reviewing & Verifying Items**
 *   Use the **"Pending Tasks"** menu to see all items requiring your attention across the hospital.
-*   **Verification**: Verify evidence provided by sections during the Implementation phase.
-*   **Closure**: Review the user's proposed **Residual Risk Assessment** and close the entry.
+*   **Action Plan Verification**: You can verify individual action plans or return them for revision.
+*   **Final Verification & Closure**:
+    *   Once all actions are completed by the section, the entry moves to **QA Verification**.
+    *   Review the user's **Residual Risk Assessment** and evidence.
+    *   Fill out the Verification Form:
+        *   **Implementation**: Select "Implemented" or "Not Implemented".
+        *   **Effectiveness**: Select "Effective" or "Not Effective".
+        *   **Remarks**: Add mandatory verification notes.
+    *   **Outcome**:
+        *   **Verify & Close**: Marks entry as `CLOSED`.
+        *   **Reject**: Reverts entry to `IMPLEMENTATION`.
 
 ### **B. Viewing Closed Registries**
 1.  Navigate to **"Closed Risks"** or **"Closed Opportunities"** from the sidebar.
@@ -128,8 +144,7 @@ Directly from the **Login Screen**, you can access the following resources:
 
 | Status | Description |
 | :--- | :--- |
-| **IMPLEMENTATION** | Entry submitted and plans approved. Section is executing actions. |
-| **FOR VERIFICATION** | Section marked action as done. QA is verifying evidence. |
-| **REASSESSMENT** | (Risks Only) Actions verified. Section confirming residual risk. |
-| **QA VERIFICATION** | Final review stage before closure. |
-| **CLOSED** | Process completed and formally closed by QA. |
+| **IMPLEMENTATION** | Entry submitted. Section is executing actions. |
+| **FOR VERIFICATION** | Section marked action as done. QA is reviewing evidence. |
+| **QA VERIFICATION** | All actions completed. QA performing final effectiveness review. |
+| **CLOSED** | Process verified effective and formally closed by QA. |

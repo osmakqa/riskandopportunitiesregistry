@@ -21,6 +21,7 @@
 | **v2.2** | [Date] | **Streamlined Workflow** | Removed "Plan Review" step. Entries now proceed directly to "Implementation" upon submission to expedite process. | QA Head |
 | **v2.3** | [Date] | **UI/UX Optimization** | Merged menus, added R&O List filters, renamed roles, implemented scrollable tables for better navigation, and cleaned up sidebar. | QA Head |
 | **v2.4** | [Date] | **Help Resources** | Added direct links to the User Manual and Orientation Video on the Login Screen for easier access. | QA Head |
+| **v2.5** | [Date] | **Compliance & Verification** | Added "Overdue" visual flagging and mandatory justification logic. Enhanced QA Verification to include detailed Implementation/Effectiveness checks before closure. | QA Head |
 
 ---
 *This log controls changes made during or subsequent to the design and development of products and services.*

@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS) (ISO 9001:2015 Clause 8.3.3)
 
 **Project:** Digital Risk & Opportunities Registry System  
-**Version:** 1.3  
+**Version:** 1.4  
 
 ---
 
@@ -15,12 +15,12 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
     *   Can view/edit only their own section's data.
     *   Can submit new Risks/Opportunities via Wizard.
     *   Can edit entries while in `IMPLEMENTATION`.
-    *   Can perform **Residual Risk Assessment** during implementation.
+    *   Can perform **Residual Risk Assessment** when marking actions as completed.
     *   Can view a **Data Analysis** dashboard filtered to their own section's data.
     *   Access to a chronological **R&O List** with simplified reference IDs (e.g., R1, O1).
-*   **QA Command Center (Admin):**
+*   **Quality Assurance Auditor (Admin):**
     *   Full visibility of all sections (Drill-down capability).
-    *   Authority to Verify Evidence and Close entries.
+    *   Authority to Verify Evidence, Evaluate Effectiveness, and Close entries.
     *   Exclusive, password-protected authority to **Reopen** closed entries.
     *   Access to Data Analysis Dashboard.
 
@@ -36,11 +36,15 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
 ### 2.3 Workflow Progression
 1.  **Submission:** Entry created -> Status `IMPLEMENTATION`. Action Plans are auto-approved.
 2.  **Action Execution:**
-    *   User clicks **"Reassess"** (for Risks) to input proposed Residual Likelihood and Severity.
-    *   System calculates proposed Residual Rating.
+    *   User clicks **"Completed"**.
+    *   **Overdue Check**: If Target Date is past, system requires "Reason for Delay".
+    *   **Residual Risk**: User inputs proposed Residual Likelihood and Severity.
     *   Status -> `FOR VERIFICATION`.
-3.  **Verification:** QA verifies evidence and reviews residual scores -> Status `REASSESSMENT` (Risks) or `QA VERIFICATION` (Opps).
-4.  **Closure:** Final QA validation -> Status `CLOSED`.
+3.  **QA Verification & Closure:**
+    *   QA reviews all completed actions.
+    *   QA validates **Implementation** (Implemented/Not Implemented) and **Effectiveness** (Effective/Not Effective).
+    *   **Pass**: If Implemented & Effective -> Status `CLOSED`.
+    *   **Fail**: If Not Implemented OR Not Effective -> Status `IMPLEMENTATION` (Returned to user).
 
 ### 2.4 Data Analysis & Reporting
 *   **Dashboard:** Section users must see a "Countdown" of upcoming target dates (Red/Orange/Green indicators).
@@ -50,7 +54,7 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
 *   **Export:** System must export data to CSV including all risk fields, action plans (aggregated), and reassessment data.
 
 ### 2.5 Traceability & Data Integrity
-*   **Audit Trail:** The system must automatically log specific events (Creation, Edits, Status Changes, Plan Approvals, Reopening, Closure) with the Username and Timestamp. This trail must be accessible via an icon in the registry list.
+*   **Audit Trail:** The system must automatically log specific events (Creation, Edits, Status Changes, Plan Approvals, Reopening, Closure) with the Username and Timestamp.
 *   **Edit Restrictions:** Users can edit details during the Implementation phase to correct data.
 *   **Deletion/Reopening:** These critical actions require password confirmation.
 *   **Numbering:** System must generate chronological, human-readable Reference IDs (R1, R2, O1...) based on creation date.

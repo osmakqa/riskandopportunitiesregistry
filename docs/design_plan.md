@@ -26,6 +26,7 @@ To transition from decentralized spreadsheet-based risk assessments to a central
 *   **Activity:** Implementation of "Edit Mode," a comprehensive **Audit Trail**, and **Data Analysis** dashboards for both QA (global) and Section (local) users.
 *   **Activity:** Implementation of **Chronological Reference IDs** and **Residual Risk Reassessment** workflow.
 *   **Optimization:** Removal of "Plan Review" step to streamline workflow (v2.2).
+*   **Enhancement:** Implementation of **Overdue Item Logic** (Visual flags, mandatory justification) and **Enhanced QA Verification** (Effectiveness checks).
 *   **Backend:** Integration with Supabase for real-time data storage, sorting, and audit logging.
 
 ### Phase 4: Verification (Testing)
