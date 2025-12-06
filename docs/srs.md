@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS) (ISO 9001:2015 Clause 8.3.3)
 
 **Project:** Digital Risk & Opportunities Registry System  
-**Version:** 1.4  
+**Version:** 1.5
 
 ---
 
@@ -11,14 +11,14 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
 ## 2. Functional Requirements
 
 ### 2.1 User Roles & Access
-*   **Section User:**
+*   **Process Owner:**
     *   Can view/edit only their own section's data.
     *   Can submit new Risks/Opportunities via Wizard.
     *   Can edit entries while in `IMPLEMENTATION`.
     *   Can perform **Residual Risk Assessment** when marking actions as completed.
     *   Can view a **Data Analysis** dashboard filtered to their own section's data.
     *   Access to a chronological **R&O List** with simplified reference IDs (e.g., R1, O1).
-*   **Quality Assurance Auditor (Admin):**
+*   **IQA Auditor (Admin):**
     *   Full visibility of all sections (Drill-down capability).
     *   Authority to Verify Evidence, Evaluate Effectiveness, and Close entries.
     *   Exclusive, password-protected authority to **Reopen** closed entries.
@@ -27,7 +27,7 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
 ### 2.2 Risk Assessment Logic
 *   **Auto-Calculation:** The system must automatically calculate `Risk Rating = Likelihood (1-5) × Severity (1-5)`.
 *   **Risk Levels:**
-    *   1-5: Low (Acceptable)
+    *   1-5: Low
     *   6-10: Moderate
     *   11-15: High
     *   16-25: Critical
@@ -39,18 +39,19 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
     *   User clicks **"Completed"**.
     *   **Overdue Check**: If Target Date is past, system requires "Reason for Delay".
     *   **Residual Risk**: User inputs proposed Residual Likelihood and Severity.
-    *   Status -> `FOR VERIFICATION`.
-3.  **QA Verification & Closure:**
-    *   QA reviews all completed actions.
-    *   QA validates **Implementation** (Implemented/Not Implemented) and **Effectiveness** (Effective/Not Effective).
+    *   Action Plan Status -> `FOR VERIFICATION`.
+3.  **IQA Verification & Closure:**
+    *   IQA reviews completed actions.
+    *   If all actions are verified, entry status -> `IQA_VERIFICATION`.
+    *   IQA validates **Implementation** (Implemented/Not Implemented) and **Effectiveness** (Effective/Not Effective).
     *   **Pass**: If Implemented & Effective -> Status `CLOSED`.
     *   **Fail**: If Not Implemented OR Not Effective -> Status `IMPLEMENTATION` (Returned to user).
 
 ### 2.4 Data Analysis & Reporting
-*   **Dashboard:** Section users must see a "Countdown" of upcoming target dates (Red/Orange/Green indicators).
+*   **Dashboard:** Users must see a "Countdown" of upcoming target dates (Red/Orange/Green indicators).
 *   **Analytics:**
-    *   **QA** must have a global dashboard showing Total, Active, and Closed counts, and a bar chart for "Closed Risks per Section".
-    *   **Section Users** must have a dashboard showing charts for their own section's Open vs. Closed items, Risk Level distribution, Annual Volume, and Source breakdown.
+    *   **IQA** must have a global dashboard showing Total, Active, and Closed counts, and a bar chart for "Closed Risks per Section".
+    *   **Process Owners** must have a dashboard showing charts for their own section's Open vs. Closed items, Risk Level distribution, Annual Volume, and Source breakdown.
 *   **Export:** System must export data to CSV including all risk fields, action plans (aggregated), and reassessment data.
 
 ### 2.5 Traceability & Data Integrity

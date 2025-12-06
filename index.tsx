@@ -59,8 +59,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type EntryType = 'RISK' | 'OPPORTUNITY';
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-// Removed PLAN_REVIEW from WorkflowStatus
-type WorkflowStatus = 'IMPLEMENTATION' | 'REASSESSMENT' | 'QA_VERIFICATION' | 'CLOSED';
+// Renamed QA_VERIFICATION to IQA_VERIFICATION
+type WorkflowStatus = 'IMPLEMENTATION' | 'REASSESSMENT' | 'IQA_VERIFICATION' | 'CLOSED';
 type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
 
 interface AuditEvent {
@@ -78,7 +78,7 @@ interface ActionPlan {
   targetDate: string;
   status: ActionStatus;
   completionRemarks?: string;
-  verificationRemarks?: string; // Added for QA remarks
+  verificationRemarks?: string;
 }
 
 interface RegistryItem {
@@ -145,7 +145,6 @@ const mapToDb = (item: RegistryItem) => ({
   expected_benefit: item.expectedBenefit,
   feasibility: item.feasibility,
   action_plans: item.actionPlans,
-  // Specific mapping for Residual Risk fields
   residual_likelihood: item.residualLikelihood,
   residual_severity: item.residualSeverity,
   residual_risk_rating: item.residualRiskRating,
@@ -188,7 +187,6 @@ const mapFromDb = (dbItem: any): RegistryItem => ({
 });
 
 const SECTIONS = [
-  'QA (Quality Assurance)',
   'Admitting Section',
   'Ambulatory Care Medicine Complex',
   'Cardiovascular Diagnostics',
@@ -213,10 +211,46 @@ const SECTIONS = [
   'Surgical Care Complex'
 ];
 
+const IQA_USERS = [
+  'Main IQA Account',
+  'Ana Concepcion Biligan',
+  'Bernadette Babanto',
+  'Catherine Vibal',
+  'Charisse Baga',
+  'Gemma Alli',
+  'Joanna Christina Santos',
+  'Marieta Avila',
+  'Max Angelo G. Terrenal',
+  'Michelle Loraine Rimando',
+  'Millicent Lumabao',
+  'Richard Son Solito',
+  'Rochelle Del Rosario',
+  'Ruth Sagales',
+  'Sharalyn Dasigan',
+  'Teodorico Frigillana'
+];
+
 // --- MOCK CREDENTIALS STORE ---
 const CREDENTIALS: Record<string, string> = {
-  'QA (Quality Assurance)': 'admin123',
-  'DEFAULT': 'osmak123' // Fallback for all other sections
+  // IQA Accounts
+  'Main IQA Account': 'admin123',
+  'Ana Concepcion Biligan': 'Biligan123',
+  'Bernadette Babanto': 'Babanto123',
+  'Catherine Vibal': 'Vibal123',
+  'Charisse Baga': 'Baga123',
+  'Gemma Alli': 'Alli123',
+  'Joanna Christina Santos': 'Santos123',
+  'Marieta Avila': 'Avila123',
+  'Max Angelo G. Terrenal': 'Terrenal123',
+  'Michelle Loraine Rimando': 'Rimando123',
+  'Millicent Lumabao': 'Lumabao123',
+  'Richard Son Solito': 'Solito123',
+  'Rochelle Del Rosario': 'DelRosario123',
+  'Ruth Sagales': 'Sagales123',
+  'Sharalyn Dasigan': 'Dasigan123',
+  'Teodorico Frigillana': 'Frigillana123',
+  // Default Section Password
+  'DEFAULT': 'osmak123' 
 };
 
 const SOURCES = [
@@ -238,7 +272,6 @@ const SOURCES = [
 const getDisplayIds = (items: RegistryItem[]) => {
   const map: Record<string, string> = {};
   
-  // Sort by createdAt to ensure chronological order
   const risks = items.filter(i => i.type === 'RISK').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   const opps = items.filter(i => i.type === 'OPPORTUNITY').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   
@@ -270,7 +303,7 @@ const getPillColor = (status: WorkflowStatus) => {
     switch (status) {
       case 'IMPLEMENTATION': return 'bg-purple-100 text-purple-800';
       case 'REASSESSMENT': return 'bg-amber-100 text-amber-800';
-      case 'QA_VERIFICATION': return 'bg-teal-100 text-teal-800';
+      case 'IQA_VERIFICATION': return 'bg-teal-100 text-teal-800';
       case 'CLOSED': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -340,14 +373,14 @@ const getStatusColor = (status: WorkflowStatus) => {
   switch (status) {
     case 'IMPLEMENTATION': return 'bg-purple-100 text-purple-800';
     case 'REASSESSMENT': return 'bg-amber-100 text-amber-800';
-    case 'QA_VERIFICATION': return 'bg-indigo-100 text-indigo-800';
+    case 'IQA_VERIFICATION': return 'bg-indigo-100 text-indigo-800';
     case 'CLOSED': return 'bg-gray-100 text-gray-800';
     default: return 'bg-gray-100 text-gray-800';
   }
 };
 
 const formatStatus = (status: WorkflowStatus) => {
-  if (status === 'QA_VERIFICATION') return 'QA VERIFICATION';
+  if (status === 'IQA_VERIFICATION') return 'IQA VERIFICATION';
   if (status === 'REASSESSMENT') return 'REASSESSMENT';
   return status.replace('_', ' ');
 }
@@ -356,7 +389,6 @@ const formatStatus = (status: WorkflowStatus) => {
 const getDaysRemaining = (item: RegistryItem): { days: number, label: string, color: string } | null => {
   if (item.status === 'CLOSED' || item.actionPlans.length === 0) return null;
   
-  // Find closest target date of active plans
   const activePlans = item.actionPlans.filter(p => p.status !== 'COMPLETED');
   if (activePlans.length === 0) return null;
 
@@ -375,7 +407,6 @@ const getDaysRemaining = (item: RegistryItem): { days: number, label: string, co
 
 // --- Components ---
 
-// Reusable Header Component matching the "Antimicrobial" style
 const AppHeader = ({ title, subtitle, centered = false, small = false }: { title: string, subtitle: string, centered?: boolean, small?: boolean }) => (
   <header className={`sticky ${small ? 'h-16 px-4' : 'h-20 px-7'} top-0 z-50 flex items-center gap-3 bg-osmak-green text-white py-3 shadow-header w-full ${centered ? 'justify-center' : ''}`}>
     <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="OsMak Logo" className={`${small ? 'h-10' : 'h-14'} w-auto object-contain`} />
@@ -408,7 +439,6 @@ const SidebarHeader = ({ onClose }: { onClose: () => void }) => (
 const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
     <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
-      {/* Header */}
       <div className="p-5 bg-osmak-green text-white flex justify-between items-center border-b border-osmak-800">
         <h2 className="text-xl font-bold flex items-center gap-3">
           <BookOpen size={24} className="text-white" /> 
@@ -417,11 +447,9 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
         <button onClick={onClose} className="hover:text-osmak-200 transition"><XCircle size={24}/></button>
       </div>
       
-      {/* Content */}
       <div className="flex-1 overflow-y-auto bg-gray-50 p-6 md:p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           
-          {/* Step 1: Submission */}
           <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
             <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-yellow-400 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">1</div>
             <div className="flex items-center gap-2 mb-3">
@@ -429,14 +457,13 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
               <h3 className="font-bold text-gray-900 text-lg">Submission</h3>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
-              <strong>Section User</strong> logs a new Risk or Opportunity. System calculates <strong>Risk Level</strong>. Action Plans are mandatory for <strong>ALL</strong> Risks.
+              <strong>Process Owner</strong> logs a new Risk or Opportunity. System calculates <strong>Risk Level</strong>. Action Plans are mandatory for <strong>ALL</strong> Risks.
             </p>
             <div className="mt-auto">
               <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded">Status: IMPLEMENTATION</span>
             </div>
           </div>
 
-          {/* Step 2: Implementation (Merged Plan Review) */}
           <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
             <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-indigo-500 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">2</div>
             <div className="flex items-center gap-2 mb-3">
@@ -444,14 +471,13 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
               <h3 className="font-bold text-gray-900 text-lg">Implementation</h3>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
-              <strong>Section User</strong> executes plans. For Risks, click <strong>"Completed"</strong> to input Residual Risk values. For Opportunities, mark as Completed.
+              <strong>Process Owner</strong> executes plans. For Risks, click <strong>"Completed"</strong> to input Residual Risk values. For Opportunities, mark as Completed.
             </p>
             <div className="mt-auto">
               <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1 rounded">Status: FOR VERIFICATION</span>
             </div>
           </div>
 
-          {/* Step 3: QA Verification */}
           <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8">
             <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-teal-500 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">3</div>
             <div className="flex items-center gap-2 mb-3">
@@ -459,14 +485,13 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
               <h3 className="font-bold text-gray-900 text-lg">Verification</h3>
             </div>
             <p className="text-gray-600 text-sm leading-relaxed mb-4 flex-1">
-              <strong>QA Auditor</strong> verifies actions and the Residual Risk provided by the section. QA may add verification remarks.
+              <strong>IQA Auditor</strong> verifies actions and the Residual Risk provided by the section. IQA may add verification remarks.
             </p>
             <div className="mt-auto">
-              <span className="bg-teal-100 text-teal-800 text-xs font-bold px-3 py-1 rounded">Status: QA VERIFICATION</span>
+              <span className="bg-teal-100 text-teal-800 text-xs font-bold px-3 py-1 rounded">Status: IQA VERIFICATION</span>
             </div>
           </div>
 
-          {/* Step 4: Closure */}
           <div className="relative bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col pt-8 border-green-200 bg-green-50/50">
             <div className="absolute -top-4 -left-4 w-10 h-10 rounded-full bg-green-600 text-white font-bold text-lg flex items-center justify-center shadow-md ring-4 ring-gray-50">4</div>
             <div className="flex items-center gap-2 mb-3">
@@ -474,7 +499,7 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
               <h3 className="font-bold text-gray-900 text-lg">Validation & Closure</h3>
             </div>
             <p className="text-gray-700 text-sm leading-relaxed mb-4 flex-1">
-              <strong>QA</strong> performs final review of effectiveness and closes the entry.
+              <strong>IQA</strong> performs final review of effectiveness and closes the entry.
             </p>
             <div className="mt-auto">
               <span className="bg-green-100 text-green-800 text-xs font-bold px-3 py-1 rounded">Status: CLOSED</span>
@@ -484,7 +509,6 @@ const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
         </div>
       </div>
 
-      {/* Footer */}
       <div className="p-4 bg-gray-100 text-center border-t border-gray-200">
          <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">
             Ospital ng Makati Quality Management System • ISO 9001:2015 Compliant
@@ -547,19 +571,20 @@ const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[], onCl
 };
 
 const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
-  const [section, setSection] = useState(SECTIONS[1]); // Default to first non-QA
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [section, setSection] = useState(SECTIONS[0]);
+  const [iqaUser, setIqaUser] = useState(IQA_USERS[0]);
+  const [isIQA, setIsIQA] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showWorkflow, setShowWorkflow] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const targetSection = isAdmin ? SECTIONS[0] : section;
-    const correctPassword = CREDENTIALS[targetSection] || CREDENTIALS['DEFAULT'];
+    const targetUser = isIQA ? iqaUser : section;
+    const correctPassword = CREDENTIALS[targetUser] || CREDENTIALS['DEFAULT'];
 
-    if (password === correctPassword) {
-      onLogin(targetSection);
+    if (password.toLowerCase() === correctPassword.toLowerCase()) {
+      onLogin(targetUser);
     } else {
       setError('Invalid password. Please try again.');
     }
@@ -569,16 +594,15 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
     <div className="min-h-screen bg-[#F0FFF4] flex items-center justify-center p-4">
       {showWorkflow && <WorkflowModal onClose={() => setShowWorkflow(false)} />}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        {/* Updated Header Style - Left Aligned per request */}
         <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" />
         
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
-            <button type="button" onClick={() => { setIsAdmin(false); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${!isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Section User</button>
-            <button type="button" onClick={() => { setIsAdmin(true); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${isAdmin ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Quality Assurance</button>
+            <button type="button" onClick={() => { setIsIQA(false); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${!isIQA ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>Process Owner</button>
+            <button type="button" onClick={() => { setIsIQA(true); setError(''); }} className={`flex-1 py-2 rounded-md text-sm font-medium transition ${isIQA ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>IQA</button>
           </div>
 
-          {!isAdmin ? (
+          {!isIQA ? (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Select Section</label>
               <select 
@@ -586,12 +610,19 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
                 onChange={(e) => setSection(e.target.value)}
                 className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 focus:border-transparent outline-none transition text-sm bg-white text-gray-900"
               >
-                {SECTIONS.filter(s => !s.startsWith('QA')).map(s => <option key={s} value={s}>{s}</option>)}
+                {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           ) : (
-            <div className="p-4 bg-indigo-50 text-indigo-800 text-sm rounded-lg border border-indigo-100">
-              Logging in as <strong>Quality Assurance Auditor</strong>.
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select IQA Auditor</label>
+              <select 
+                value={iqaUser} 
+                onChange={(e) => setIqaUser(e.target.value)}
+                className="w-full rounded-lg border-gray-300 border p-3 focus:ring-2 focus:ring-osmak-500 focus:border-transparent outline-none transition text-sm bg-white text-gray-900"
+              >
+                {IQA_USERS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
           )}
 
@@ -619,7 +650,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
                   <BookOpen size={16} /> View System Workflow
                 </button>
                 <a 
-                  href="https://drive.google.com/file/d/1obDtzRxsTOpUMF0_pjScmyx-njpW_JAB/view?usp=sharing" 
+                  href="/Osmak_Risk_Registry_User_Manual.pdf" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="w-full text-osmak-green text-sm font-medium hover:underline flex items-center justify-center gap-2"
@@ -644,7 +675,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
 
 const ItemDetailModal = ({ 
   item, 
-  isQA, 
+  isIQA, 
   currentUser,
   displayId,
   onClose, 
@@ -652,7 +683,7 @@ const ItemDetailModal = ({
   onDelete 
 }: { 
   item: RegistryItem, 
-  isQA: boolean, 
+  isIQA: boolean, 
   currentUser: string,
   displayId: string,
   onClose: () => void, 
@@ -666,14 +697,12 @@ const ItemDetailModal = ({
     date: new Date().toISOString().split('T')[0]
   });
   
-  // QA Verification Form State
-  const [qaVerification, setQaVerification] = useState({
+  const [iqaVerification, setIqaVerification] = useState({
     implementation: 'IMPLEMENTED' as 'IMPLEMENTED' | 'NOT_IMPLEMENTED',
     effectiveness: 'EFFECTIVE' as 'EFFECTIVE' | 'NOT_EFFECTIVE',
     remarks: ''
   });
 
-  // Editing State
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<RegistryItem>(item);
 
@@ -681,14 +710,12 @@ const ItemDetailModal = ({
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
   const [completingActionId, setCompletingActionId] = useState<string | null>(null);
   const [completionRemarks, setCompletionRemarks] = useState('');
-  const [delayReason, setDelayReason] = useState(''); // Justification for overdue
+  const [delayReason, setDelayReason] = useState('');
 
-  // Delete Confirmation State
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
-  // Reopen Confirmation State
   const [showReopenConfirm, setShowReopenConfirm] = useState(false);
   const [reopenPassword, setReopenPassword] = useState('');
   const [reopenError, setReopenError] = useState('');
@@ -696,7 +723,6 @@ const ItemDetailModal = ({
   const reassessmentRiskRating = reassessment.likelihood * reassessment.severity;
   const reassessmentRiskLevel = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
 
-  // Sync editData when modal opens/item changes
   useEffect(() => {
     setEditData(item);
   }, [item]);
@@ -711,14 +737,12 @@ const ItemDetailModal = ({
       
       if (status === 'COMPLETED') {
          eventLog = 'Action Plan Verified as Complete';
-         // Check if ALL plans are now COMPLETED
          const allCompleted = updatedActions.every(a => a.status === 'COMPLETED');
          if (allCompleted) {
-             // If all completed, move to QA_VERIFICATION (Skipping REASSESSMENT by Section)
-             nextStatus = 'QA_VERIFICATION';
+             nextStatus = 'IQA_VERIFICATION';
          }
       } else {
-         eventLog = 'Action Plan Rejected by QA';
+         eventLog = 'Action Plan Rejected by IQA';
       }
       
       let updatedItem = addAuditEvent(item, eventLog, currentUser);
@@ -731,7 +755,6 @@ const ItemDetailModal = ({
     const plan = item.actionPlans.find(ap => ap.id === actionId);
     if (!plan) return;
 
-    // Check overdue logic
     const targetDate = new Date(plan.targetDate);
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -749,7 +772,6 @@ const ItemDetailModal = ({
 
     let updatedItem = addAuditEvent(item, "Action Submitted for Verification", currentUser);
     
-    // Prepare updates
     let updates: Partial<RegistryItem> = {};
 
     if (item.type === 'RISK') {
@@ -773,26 +795,22 @@ const ItemDetailModal = ({
     setDelayReason('');
   };
 
-  const handleSubmitQAVerification = () => {
-      // Determine outcome
-      if (qaVerification.implementation === 'NOT_IMPLEMENTED' || qaVerification.effectiveness === 'NOT_EFFECTIVE') {
-          // Reject Logic
-          const reason = `QA Verification Failed: Implementation=${qaVerification.implementation}, Effectiveness=${qaVerification.effectiveness}`;
-          let updatedItem = addAuditEvent(item, "QA Verification Rejected", currentUser);
+  const handleSubmitIQAVerification = () => {
+      if (iqaVerification.implementation === 'NOT_IMPLEMENTED' || iqaVerification.effectiveness === 'NOT_EFFECTIVE') {
+          const reason = `IQA Verification Failed: Implementation=${iqaVerification.implementation}, Effectiveness=${iqaVerification.effectiveness}`;
+          let updatedItem = addAuditEvent(item, "IQA Verification Rejected", currentUser);
           
-          // Append remarks
-          const rejectionNote = `[QA REJECTION] ${qaVerification.remarks || 'No remarks provided.'}`;
+          const rejectionNote = `[IQA REJECTION] ${iqaVerification.remarks || 'No remarks provided.'}`;
           const currentRemarks = item.effectivenessRemarks || '';
           
           onUpdate({
               ...updatedItem,
-              status: 'IMPLEMENTATION', // Revert to Implementation for correction
+              status: 'IMPLEMENTATION',
               effectivenessRemarks: currentRemarks ? `${currentRemarks}\n\n${rejectionNote}` : rejectionNote
           });
       } else {
-          // Success Logic
           let updatedItem = addAuditEvent(item, "Entry Validated and Closed", currentUser);
-          const closingNote = qaVerification.remarks ? `[QA VERIFIED] ${qaVerification.remarks}` : (item.effectivenessRemarks || '');
+          const closingNote = iqaVerification.remarks ? `[IQA VERIFIED] ${iqaVerification.remarks}` : (item.effectivenessRemarks || '');
 
           onUpdate({
               ...updatedItem,
@@ -835,7 +853,7 @@ const ItemDetailModal = ({
     const action: ActionPlan = {
       id: `AP-${Date.now()}`,
       ...newPlan,
-      status: 'APPROVED' // Auto-approved as Plan Review is skipped
+      status: 'APPROVED'
     };
     const updatedItem = addAuditEvent(item, `Action Plan Added: ${newPlan.description}`, currentUser);
     onUpdate({
@@ -855,7 +873,6 @@ const ItemDetailModal = ({
     });
   };
 
-  // --- Edit Logic ---
   const updateEditRisk = (l: number, s: number) => {
     setEditData(prev => ({
       ...prev,
@@ -873,8 +890,7 @@ const ItemDetailModal = ({
   };
 
   const strategies = item.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
-  // Allow edit in IMPLEMENTATION since PLAN_REVIEW is removed
-  const canEdit = !isQA && item.status === 'IMPLEMENTATION';
+  const canEdit = !isIQA && item.status === 'IMPLEMENTATION';
 
   const isPlanOverdue = (plan: ActionPlan) => {
     if (plan.status === 'COMPLETED' || plan.status === 'FOR_VERIFICATION') return false; 
@@ -1044,7 +1060,6 @@ const ItemDetailModal = ({
                 </h3>
                 {item.type === 'RISK' ? (
                   <div className="space-y-6">
-                    {/* Initial Risk Block */}
                     <div>
                         {(item.residualLikelihood || 0) > 0 && <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Initial Assessment</h4>}
                         <div className="flex gap-4">
@@ -1089,7 +1104,6 @@ const ItemDetailModal = ({
                         </div>
                     </div>
 
-                    {/* Residual Risk Block */}
                     {(item.residualLikelihood || 0) > 0 && (
                         <div>
                              <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 border-t pt-4">Residual Assessment</h4>
@@ -1132,7 +1146,7 @@ const ItemDetailModal = ({
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                 <ClipboardCheck size={20} /> Action Plans
               </h3>
-              {(!isQA && item.status === 'IMPLEMENTATION' && !isAddingPlan) && (
+              {(!isIQA && item.status === 'IMPLEMENTATION' && !isAddingPlan) && (
                 <button onClick={() => setIsAddingPlan(true)} className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-100 border border-blue-200">
                   + Add / Revise Plan
                 </button>
@@ -1170,7 +1184,7 @@ const ItemDetailModal = ({
                           )}
                           {ap.verificationRemarks && (
                             <div className="mt-2 text-xs bg-indigo-50 p-2 rounded text-indigo-800 border border-indigo-100">
-                              <span className="font-bold">QA Notes:</span> {ap.verificationRemarks}
+                              <span className="font-bold">IQA Notes:</span> {ap.verificationRemarks}
                             </div>
                           )}
                         </td>
@@ -1191,7 +1205,7 @@ const ItemDetailModal = ({
                           {overdue && <span className="ml-2 px-1.5 py-0.5 bg-red-600 text-white text-[10px] rounded font-bold">OVERDUE</span>}
                         </td>
                         <td className="px-4 py-3 text-right align-top pt-4">
-                          {isQA ? (
+                          {isIQA ? (
                             <div className="flex flex-row gap-2 justify-end">
                               {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_VERIFICATION' && (
                                 <>
@@ -1226,8 +1240,7 @@ const ItemDetailModal = ({
                                 <button 
                                     onClick={() => {
                                         setCompletingActionId(ap.id);
-                                        setDelayReason(''); // Reset reason when opening
-                                        // Initialize reassessment values for the expansion row
+                                        setDelayReason('');
                                         if (item.type === 'RISK') {
                                             setReassessment(prev => ({
                                                 ...prev,
@@ -1350,7 +1363,7 @@ const ItemDetailModal = ({
               </table>
             </div>
 
-            {isQA && item.status === 'IMPLEMENTATION' && item.type === 'RISK' && item.actionPlans.length === 0 && (
+            {isIQA && item.status === 'IMPLEMENTATION' && item.type === 'RISK' && item.actionPlans.length === 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4 flex items-center justify-between">
                     <div>
                         <h4 className="font-bold text-red-900">Missing Action Plan</h4>
@@ -1424,7 +1437,7 @@ const ItemDetailModal = ({
           </div>
 
           <div className="mt-8 border-t pt-6 flex gap-4">
-              {item.status === 'CLOSED' && isQA && !showReopenConfirm && !showDeleteConfirm && (
+              {item.status === 'CLOSED' && isIQA && !showReopenConfirm && !showDeleteConfirm && (
                 <button 
                     onClick={() => setShowReopenConfirm(true)}
                     className="text-blue-500 text-sm hover:underline hover:text-blue-700 flex items-center gap-2"
@@ -1481,11 +1494,10 @@ const ItemDetailModal = ({
               )}
           </div>
         
-            {/* --- QA Verification & Closure Block --- */}
-            {item.status === 'QA_VERIFICATION' && isQA && (
+            {item.status === 'IQA_VERIFICATION' && isIQA && (
               <div className="space-y-4 bg-indigo-50 p-6 rounded-xl border border-indigo-100 mt-4">
                  <h4 className="font-bold text-indigo-900 flex items-center gap-2 text-lg">
-                    <CheckCircle2 size={24}/> QA Verification & Closure
+                    <CheckCircle2 size={24}/> IQA Verification & Closure
                  </h4>
                  
                  {item.type === 'RISK' && (
@@ -1512,8 +1524,8 @@ const ItemDetailModal = ({
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input 
                                         type="radio" name="implementation" value="IMPLEMENTED"
-                                        checked={qaVerification.implementation === 'IMPLEMENTED'}
-                                        onChange={() => setQaVerification({...qaVerification, implementation: 'IMPLEMENTED'})}
+                                        checked={iqaVerification.implementation === 'IMPLEMENTED'}
+                                        onChange={() => setIqaVerification({...iqaVerification, implementation: 'IMPLEMENTED'})}
                                         className="accent-indigo-600"
                                     />
                                     <span className="text-sm text-gray-800 font-medium">Implemented</span>
@@ -1521,8 +1533,8 @@ const ItemDetailModal = ({
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input 
                                         type="radio" name="implementation" value="NOT_IMPLEMENTED"
-                                        checked={qaVerification.implementation === 'NOT_IMPLEMENTED'}
-                                        onChange={() => setQaVerification({...qaVerification, implementation: 'NOT_IMPLEMENTED'})}
+                                        checked={iqaVerification.implementation === 'NOT_IMPLEMENTED'}
+                                        onChange={() => setIqaVerification({...iqaVerification, implementation: 'NOT_IMPLEMENTED'})}
                                         className="accent-red-600"
                                     />
                                     <span className="text-sm text-gray-800 font-medium">Not Implemented</span>
@@ -1536,8 +1548,8 @@ const ItemDetailModal = ({
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input 
                                         type="radio" name="effectiveness" value="EFFECTIVE"
-                                        checked={qaVerification.effectiveness === 'EFFECTIVE'}
-                                        onChange={() => setQaVerification({...qaVerification, effectiveness: 'EFFECTIVE'})}
+                                        checked={iqaVerification.effectiveness === 'EFFECTIVE'}
+                                        onChange={() => setIqaVerification({...iqaVerification, effectiveness: 'EFFECTIVE'})}
                                         className="accent-indigo-600"
                                     />
                                     <span className="text-sm text-gray-800 font-medium">Effective</span>
@@ -1545,8 +1557,8 @@ const ItemDetailModal = ({
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input 
                                         type="radio" name="effectiveness" value="NOT_EFFECTIVE"
-                                        checked={qaVerification.effectiveness === 'NOT_EFFECTIVE'}
-                                        onChange={() => setQaVerification({...qaVerification, effectiveness: 'NOT_EFFECTIVE'})}
+                                        checked={iqaVerification.effectiveness === 'NOT_EFFECTIVE'}
+                                        onChange={() => setIqaVerification({...iqaVerification, effectiveness: 'NOT_EFFECTIVE'})}
                                         className="accent-red-600"
                                     />
                                     <span className="text-sm text-gray-800 font-medium">Not Effective</span>
@@ -1561,21 +1573,21 @@ const ItemDetailModal = ({
                            className="w-full border rounded-lg p-3 text-sm bg-gray-50 text-gray-900 border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" 
                            placeholder="Enter remarks regarding implementation evidence and effectiveness..."
                            rows={3}
-                           value={qaVerification.remarks} 
-                           onChange={e => setQaVerification({...qaVerification, remarks: e.target.value})} 
+                           value={iqaVerification.remarks} 
+                           onChange={e => setIqaVerification({...iqaVerification, remarks: e.target.value})} 
                         />
                      </div>
                      
                      <div className="pt-2">
                         <button 
-                            onClick={handleSubmitQAVerification}
+                            onClick={handleSubmitIQAVerification}
                             className={`w-full py-3 rounded-lg font-bold shadow-md transition flex items-center justify-center gap-2 ${
-                                qaVerification.implementation === 'NOT_IMPLEMENTED' || qaVerification.effectiveness === 'NOT_EFFECTIVE'
+                                iqaVerification.implementation === 'NOT_IMPLEMENTED' || iqaVerification.effectiveness === 'NOT_EFFECTIVE'
                                 ? 'bg-red-600 hover:bg-red-700 text-white' 
                                 : 'bg-green-600 hover:bg-green-700 text-white'
                             }`}
                         >
-                            {qaVerification.implementation === 'NOT_IMPLEMENTED' || qaVerification.effectiveness === 'NOT_EFFECTIVE'
+                            {iqaVerification.implementation === 'NOT_IMPLEMENTED' || iqaVerification.effectiveness === 'NOT_EFFECTIVE'
                              ? 'Reject & Revert to Implementation'
                              : 'Verify Completion & Close Entry'
                             }
@@ -1627,11 +1639,9 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
     dateIdentified: new Date().toISOString().split('T')[0]
   });
   
-  // AI State
   const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingPlans, setIsGeneratingPlans] = useState(false);
 
-  // Step 3 State
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
 
   const isMandatoryAction = true;
@@ -1640,7 +1650,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
   const strategies = data.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
 
   const handleNext = () => {
-    // Validation
     if (step === 1) {
         if (!data.process || !data.source || !data.description || !data.dateIdentified) {
             alert("Please fill in all required fields.");
@@ -1667,7 +1676,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
       actionPlans: [...(prev.actionPlans || []), { 
         id: `AP-${Date.now()}`, 
         ...newPlan, 
-        status: 'APPROVED' // Auto-approved as Plan Review is skipped
+        status: 'APPROVED'
       }]
     }));
     setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
@@ -1690,7 +1699,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
     }));
   };
 
-  // --- AI Features ---
   const handleRefineDescription = async () => {
      if (!data.description?.trim()) return;
      setIsRefining(true);
@@ -1706,7 +1714,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
          });
          
          const refinedText = response.text.trim();
-         // Remove quotes if the model adds them
          const cleanText = refinedText.replace(/^"|"$/g, '');
          setData(prev => ({ ...prev, description: cleanText }));
      } catch (e) {
@@ -1781,7 +1788,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
         </div>
         
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Progress Bar */}
           <div className="flex gap-2 mb-6">
             {[1, 2, 3, 4].map(i => (
               <div key={i} className={`h-2 flex-1 rounded-full ${i <= step ? 'bg-osmak-500' : 'bg-gray-200'}`} />
@@ -1899,7 +1905,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                  </div>
               </div>
 
-              {/* Action Required Guidance */}
               <div className={`p-4 rounded-lg border text-sm ${
                 data.riskLevel === 'CRITICAL' ? 'bg-red-50 border-red-200 text-red-800' :
                 data.riskLevel === 'HIGH' ? 'bg-orange-50 border-orange-200 text-orange-800' :
@@ -1962,7 +1967,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                    </div>
                )}
 
-               {/* List Added Actions */}
                <div className="space-y-3">
                   {data.actionPlans?.map((plan, idx) => (
                       <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start animate-fadeIn">
@@ -1976,7 +1980,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                   ))}
                </div>
 
-               {/* Add New Action Form */}
                <div className="border rounded-lg p-4 bg-gray-50">
                   <h4 className="font-bold text-sm text-gray-700 mb-3">Add Action Plan</h4>
                   <div className="space-y-3">
@@ -2040,7 +2043,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                   <CheckCircle2 size={32} />
                </div>
                <h3 className="font-bold text-xl text-gray-900">Ready to Submit?</h3>
-               <p className="text-gray-600">Please review your details. Once submitted, it will be available for QA review.</p>
+               <p className="text-gray-600">Please review your details. Once submitted, it will be available for IQA review.</p>
                <div className="bg-gray-50 p-4 rounded text-left text-sm space-y-2">
                   <p><strong>Type:</strong> {data.type}</p>
                   <p><strong>Description:</strong> {data.description}</p>
@@ -2087,11 +2090,13 @@ const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => (
   </header>
 );
 
+type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS';
+
 const App = () => {
   const [user, setUser] = useState<string | null>(null);
   const [items, setItems] = useState<RegistryItem[]>([]);
-  const [view, setView] = useState<'DASHBOARD' | 'RO_LIST' | 'RISKS' | 'OPPORTUNITIES' | 'QA_PENDING' | 'QA_SECTION_VIEW' | 'QA_OPEN_RISKS' | 'QA_OPEN_OPPS' | 'QA_ANALYSIS' | 'QA_CLOSED_RISKS' | 'QA_CLOSED_OPPS'>('DASHBOARD');
-  const [selectedSection, setSelectedSection] = useState<string | null>(null); // For QA drill down
+  const [view, setView] = useState<AppView>('DASHBOARD');
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
   const [selectedAuditTrailItem, setSelectedAuditTrailItem] = useState<RegistryItem | null>(null);
@@ -2100,35 +2105,29 @@ const App = () => {
   const [isSectionsOpen, setIsSectionsOpen] = useState(false);
   const [closedFilterSection, setClosedFilterSection] = useState('');
   
-  // Mobile Sidebar State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Sorting State
   const [sortField, setSortField] = useState<'dateIdentified' | 'riskLevel' | 'status' | 'createdAt'>('dateIdentified');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  // Analysis State
   const [analysisStartDate, setAnalysisStartDate] = useState(new Date().getFullYear() + '-01-01');
   const [analysisEndDate, setAnalysisEndDate] = useState(new Date().getFullYear() + '-12-31');
 
-  // List Filter State
   const [listFilterYear, setListFilterYear] = useState<string>('ALL');
   const [listFilterStatus, setListFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [listFilterType, setListFilterType] = useState<'ALL' | 'RISK' | 'OPPORTUNITY'>('ALL');
 
   const displayIdMap = useMemo(() => getDisplayIds(items), [items]);
 
-  // Helper to get unique years from items
   const availableYears = useMemo(() => {
     const years = new Set(
         items
-            .filter(i => i.dateIdentified) // Filter out empty/null
+            .filter(i => i.dateIdentified)
             .map(i => i.dateIdentified.split('-')[0])
     );
     return Array.from(years).sort().reverse();
   }, [items]);
 
-  // --- Supabase Integration ---
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -2141,7 +2140,6 @@ const App = () => {
     } catch (err) {
       console.error('Supabase connection error:', err);
       setDbConnected(false);
-      // Fallback to local storage or empty
       setItems([]); 
     } finally {
       setLoading(false);
@@ -2162,7 +2160,7 @@ const App = () => {
     const item: RegistryItem = {
       ...newItem as RegistryItem,
       id: `${newItem.type === 'RISK' ? 'R' : 'O'}-${Date.now().toString().slice(-6)}`,
-      status: 'IMPLEMENTATION', // Direct to implementation
+      status: 'IMPLEMENTATION',
       createdAt: new Date().toISOString().split('T')[0],
       riskLevel: newItem.type === 'RISK' ? calculateRiskLevel(newItem.likelihood || 1, newItem.severity || 1) : undefined,
       auditTrail: [initialEvent]
@@ -2184,7 +2182,7 @@ const App = () => {
         const { error } = await supabase.from('registry_items').update(mapToDb(updatedItem)).eq('id', updatedItem.id);
         if (error) throw error;
         setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
-        setSelectedItem(updatedItem); // Keep modal updated
+        setSelectedItem(updatedItem);
     } catch (err) {
         alert("Update failed.");
         console.error(err);
@@ -2205,39 +2203,13 @@ const App = () => {
 
   const exportCSV = (data: RegistryItem[], filename: string) => {
     const headers = [
-        'Ref #',
-        'Process/Function',
-        'Source',
-        'Description of Risk',
-        'Type (Risk or Opportunity)',
-        'Potential Impact on QMS',
-        'Likelihood',
-        'Severity',
-        'Risk Rating',
-        'Risk Level',
-        'Existing Controls/Mitigation',
-        'Action Plan',
-        'Responsible Person',
-        'Target Completion Date',
-        'Verification/Evidence',
-        'Status (Open or Closed)',
-        'Date of Re-Assessment',
-        'Residual Likelihood',
-        'Residual Severity',
-        'Residual Risk Rating',
-        'Residual Risk Level',
-        'Remarks on Effectiveness'
+        'Ref #','Process/Function','Source','Description of Risk','Type (Risk or Opportunity)','Potential Impact on QMS','Likelihood','Severity','Risk Rating','Risk Level','Existing Controls/Mitigation','Action Plan','Responsible Person','Target Completion Date','Verification/Evidence','Status (Open or Closed)','Date of Re-Assessment','Residual Likelihood','Residual Severity','Residual Risk Rating','Residual Risk Level','Remarks on Effectiveness'
     ];
 
-    // Helper to safely format CSV cells
     const formatCell = (value: any) => {
-        if (value === null || value === undefined) {
-            return '""';
-        }
+        if (value === null || value === undefined) return '""';
         const stringValue = String(value);
-        // Escape double quotes by doubling them
         const escapedValue = stringValue.replace(/"/g, '""');
-        // Wrap in double quotes if it contains commas, newlines, or double quotes
         if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
              return `"${escapedValue}"`;
         }
@@ -2245,35 +2217,13 @@ const App = () => {
     };
 
     const rows = data.map(item => {
-        // Aggregate action plans into single strings, separated by a newline within the cell
         const actionPlansDesc = item.actionPlans.map(p => p.description).join('; ');
         const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
         const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
         const evidences = item.actionPlans.map(p => p.evidence).join('; ');
 
         const rowData = [
-            displayIdMap[item.id] || item.id,
-            item.process,
-            item.source,
-            item.description,
-            item.type,
-            item.impactQMS,
-            item.likelihood,
-            item.severity,
-            item.riskRating,
-            item.riskLevel,
-            item.existingControls,
-            actionPlansDesc,
-            responsiblePersons,
-            targetDates,
-            evidences,
-            item.status === 'CLOSED' ? 'Closed' : 'Open',
-            item.reassessmentDate,
-            item.residualLikelihood,
-            item.residualSeverity,
-            item.residualRiskRating,
-            item.residualRiskLevel,
-            item.effectivenessRemarks
+            displayIdMap[item.id] || item.id, item.process, item.source, item.description, item.type, item.impactQMS, item.likelihood, item.severity, item.riskRating, item.riskLevel, item.existingControls, actionPlansDesc, responsiblePersons, targetDates, evidences, item.status === 'CLOSED' ? 'Closed' : 'Open', item.reassessmentDate, item.residualLikelihood, item.residualSeverity, item.residualRiskRating, item.residualRiskLevel, item.effectivenessRemarks
         ];
         
         return rowData.map(val => formatCell(val || '')).join(',');
@@ -2290,13 +2240,12 @@ const App = () => {
 };
 
 
-  // --- Sorting Logic ---
   const handleSort = (field: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt') => {
       if (sortField === field) {
           setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
       } else {
           setSortField(field);
-          setSortDirection('desc'); // Default to newest/highest first
+          setSortDirection('desc');
       }
   };
 
@@ -2322,43 +2271,32 @@ const App = () => {
       });
   };
 
-  // --- Filtering Logic ---
-  const isQA = user === 'QA (Quality Assurance)';
-  const activeSection = isQA && selectedSection ? selectedSection : user;
+  const isIQA = IQA_USERS.includes(user || '');
+  const activeSection = isIQA && selectedSection ? selectedSection : user;
   
-  // Filter items based on current view context
   const contextItems = useMemo(() => {
-     if (isQA && !selectedSection) return items; // Global items for QA agg
+     if (isIQA && !selectedSection) return items;
      return items.filter(i => i.section === activeSection);
-  }, [items, isQA, selectedSection, activeSection]);
+  }, [items, isIQA, selectedSection, activeSection]);
 
   const highRisks = contextItems.filter(i => i.type === 'RISK' && (i.riskLevel === 'HIGH' || i.riskLevel === 'CRITICAL') && i.status !== 'CLOSED');
   const openRisks = contextItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
   const openOpps = contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
   
-  // QA Global Lists
   const allOpenRisks = items.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
   const allOpenOpps = items.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
 
-  // Pending tasks for QA
-  const pendingQA = items.filter(i => 
+  const pendingIQA = items.filter(i => 
     (i.status === 'IMPLEMENTATION' && i.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION')) ||
-    (i.status === 'QA_VERIFICATION')
+    (i.status === 'IQA_VERIFICATION')
   );
   
-  // Computed list for R&O List with Filters
   const filteredROList = useMemo(() => {
     return contextItems.filter(item => {
-        // Year Filter
         if (listFilterYear !== 'ALL' && (!item.dateIdentified || !item.dateIdentified.startsWith(listFilterYear))) return false;
-        
-        // Status Filter
         if (listFilterStatus === 'OPEN' && item.status === 'CLOSED') return false;
         if (listFilterStatus === 'CLOSED' && item.status !== 'CLOSED') return false;
-        
-        // Type Filter
         if (listFilterType !== 'ALL' && item.type !== listFilterType) return false;
-        
         return true;
     });
   }, [contextItems, listFilterYear, listFilterStatus, listFilterType]);
@@ -2368,7 +2306,6 @@ const App = () => {
     
     return (
     <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col`}>
-      {/* Table Header with Export Link for Open Risks on Dashboard */}
       {view === 'DASHBOARD' && !isClosed && type === 'RISK' && (
           <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b shrink-0">
               <h3 className="font-bold text-gray-700">Open Risks</h3>
@@ -2508,7 +2445,7 @@ const App = () => {
                         const largeArcFlag = percentage > 0.5 ? 1 : 0;
                         
                         const pathData = total === value 
-                            ? `M 50 10 A 40 40 0 1 1 49.99 10` // Full circle
+                            ? `M 50 10 A 40 40 0 1 1 49.99 10`
                             : `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
 
                         const slice = (
@@ -2527,7 +2464,6 @@ const App = () => {
                         <circle cx="50" cy="50" r="40" fill="#f3f4f6" />
                     )}
                 </svg>
-                {/* Hollow Center */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center">
                         <span className="text-2xl font-bold text-gray-800">{total}</span>
@@ -2551,14 +2487,10 @@ const App = () => {
   };
 
   const RiskHeatmap = ({ items }: { items: RegistryItem[] }) => {
-      // 5x5 Matrix Logic
       const matrix = Array(5).fill(0).map(() => Array(5).fill(0));
       
       items.filter(i => i.type === 'RISK').forEach(item => {
           if (item.likelihood && item.severity) {
-              // Indices are 0-based, scores are 1-based (1-5)
-              // Likelihood (Y-axis): 5 at top, 1 at bottom -> index = 5 - likelihood
-              // Severity (X-axis): 1 at left, 5 at right -> index = severity - 1
               const row = 5 - item.likelihood;
               const col = item.severity - 1;
               matrix[row][col]++;
@@ -2568,12 +2500,11 @@ const App = () => {
       const getCellColor = (l: number, s: number, count: number) => {
           const rating = l * s;
           let baseColor = '';
-          if (rating >= 16) baseColor = 'bg-red-100 text-red-800 border-red-200'; // Critical
-          else if (rating >= 11) baseColor = 'bg-orange-100 text-orange-800 border-orange-200'; // High
-          else if (rating >= 6) baseColor = 'bg-yellow-100 text-yellow-800 border-yellow-200'; // Moderate
-          else baseColor = 'bg-green-100 text-green-800 border-green-200'; // Low
+          if (rating >= 16) baseColor = 'bg-red-100 text-red-800 border-red-200';
+          else if (rating >= 11) baseColor = 'bg-orange-100 text-orange-800 border-orange-200';
+          else if (rating >= 6) baseColor = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+          else baseColor = 'bg-green-100 text-green-800 border-green-200';
 
-          // Darken if populated
           if (count > 0) {
              if (rating >= 16) return 'bg-red-500 text-white font-bold';
              if (rating >= 11) return 'bg-orange-500 text-white font-bold';
@@ -2620,7 +2551,6 @@ const App = () => {
   }
 
   const renderAnalysisDashboard = () => {
-    // 1. Filter items by date range (Closed At for closed items, Created At for open items)
     const filteredItems = items.filter(i => {
        const dateToCheck = i.closedAt || i.createdAt;
        return dateToCheck >= analysisStartDate && dateToCheck <= analysisEndDate;
@@ -2635,10 +2565,8 @@ const App = () => {
     const totalClosedRisks = filteredItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED').length;
     const totalClosedOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED').length;
 
-
-    // 2. Count Closed Risks per Section within date range
     const closedRisksBySection: Record<string, number> = {};
-    SECTIONS.filter(s => !s.startsWith('QA')).forEach(s => closedRisksBySection[s] = 0);
+    SECTIONS.filter(s => !s.startsWith('IQA')).forEach(s => closedRisksBySection[s] = 0);
 
     filteredItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED').forEach(i => {
        if (closedRisksBySection[i.section] !== undefined) {
@@ -2648,7 +2576,6 @@ const App = () => {
 
     const maxClosed = Math.max(...Object.values(closedRisksBySection), 1);
 
-    // 3. Prepare Data for Charts
     const riskLevelData = {
         'Low': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'LOW').length,
         'Moderate': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'MODERATE').length,
@@ -2662,7 +2589,6 @@ const App = () => {
         sourceData[src] = (sourceData[src] || 0) + 1;
     });
 
-    // Sort source data to keep chart clean (top 5 + others)
     const sortedSources = Object.entries(sourceData).sort((a,b) => b[1] - a[1]);
     const topSources = sortedSources.slice(0, 5);
     const otherSourcesCount = sortedSources.slice(5).reduce((acc, curr) => acc + curr[1], 0);
@@ -2673,7 +2599,6 @@ const App = () => {
 
     return (
        <div className="space-y-8 animate-fadeIn">
-          {/* Filters */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
              <div className="flex items-center gap-2 text-osmak-green-dark font-bold mb-1"><Filter size={20}/> Date Filter</div>
              <div>
@@ -2686,10 +2611,8 @@ const App = () => {
              </div>
           </div>
 
-          {/* KPI Cards Grid - 3 Columns */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
-              {/* --- RISKS ROW --- */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                   <div className="flex justify-between items-start">
                     <div>
@@ -2723,7 +2646,6 @@ const App = () => {
                   </div>
               </div>
 
-              {/* --- OPPORTUNITIES ROW --- */}
                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                   <div className="flex justify-between items-start">
                     <div>
@@ -2758,21 +2680,18 @@ const App = () => {
               </div>
           </div>
 
-          {/* New Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Risk Level Distribution (Donut) */}
               <DonutChart 
                   title="Risk Level Distribution"
                   data={riskLevelData}
                   colors={{
-                      'Low': '#4ade80', // green-400
-                      'Moderate': '#facc15', // yellow-400
-                      'High': '#fb923c', // orange-400
-                      'Critical': '#ef4444' // red-500
+                      'Low': '#4ade80',
+                      'Moderate': '#facc15',
+                      'High': '#fb923c',
+                      'Critical': '#ef4444'
                   }}
               />
 
-              {/* Source Distribution (Donut) */}
               <DonutChart 
                   title="Entries by Source"
                   data={finalSourceData}
@@ -2785,15 +2704,10 @@ const App = () => {
                   }}
               />
 
-              {/* QA gets Heatmap, Section gets simple list or another chart? */}
-              {/* If QA View, show Heatmap. If Section View, show something else or same? */}
-              {/* The request implied enhancing 'section accounts' specifically, but 'same with qa' */}
-              {/* Let's show Heatmap for everyone as it's useful */}
               <RiskHeatmap items={filteredItems} />
           </div>
 
-          {/* QA-Specific Bar Chart: Closed Risks by Section */}
-          {isQA && !selectedSection && (
+          {isIQA && !selectedSection && (
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                 <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><BarChart3 size={20}/> Closed Risks by Section</h3>
                 <div className="space-y-3">
@@ -2818,8 +2732,7 @@ const App = () => {
     );
   };
 
-  // Helper for mobile menu selection
-  const handleViewChange = (newView: typeof view) => {
+  const handleViewChange = (newView: AppView) => {
     setView(newView);
     setIsMobileMenuOpen(false);
   };
@@ -2834,7 +2747,6 @@ const App = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-100 font-sans text-gray-900">
-      {/* Mobile Header Bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#009a3e] flex items-center justify-between px-4 z-40 shadow-md">
          <div className="flex items-center gap-2">
             <img 
@@ -2853,7 +2765,6 @@ const App = () => {
       </div>
 
 
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -2861,15 +2772,13 @@ const App = () => {
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`w-72 bg-white text-gray-800 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        {/* Updated Sidebar Header */}
         <SidebarHeader onClose={() => setIsMobileMenuOpen(false)} />
         
         <div className="p-6 border-b border-gray-200 bg-gray-50">
            <div className="text-xs uppercase text-gray-500 font-bold mb-1">Logged in as</div>
            <div className="font-bold text-lg truncate text-osmak-green-dark">{user}</div>
-           {isQA && !selectedSection && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded text-white mt-1 inline-block">Auditor</span>}
+           {isIQA && !selectedSection && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded text-white mt-1 inline-block">IQA Auditor</span>}
            {selectedSection && <button onClick={() => { setSelectedSection(null); handleViewChange('DASHBOARD'); }} className="text-xs text-yellow-600 underline mt-2 hover:text-yellow-700">Exit Section View</button>}
         </div>
 
@@ -2881,7 +2790,7 @@ const App = () => {
             <LayoutDashboard size={20} /> Dashboard
           </button>
 
-          {(!isQA || selectedSection) ? (
+          {(!isIQA || selectedSection) ? (
              <>
                 <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">Registries</div>
                 <button 
@@ -2890,23 +2799,22 @@ const App = () => {
                 >
                     <ClipboardList size={20} /> R&O List
                 </button>
-                {/* Data Analysis for Section Users */}
                 <button 
-                    onClick={() => handleViewChange('QA_ANALYSIS')} // Reusing the same view logic for simplicity, logic handles filtering
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'QA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    onClick={() => handleViewChange('IQA_ANALYSIS')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                     <BarChart3 size={20} /> Data Analysis
                 </button>
              </>
           ) : (
              <>
-                <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">QA Overview</div>
+                <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">IQA Overview</div>
                 <button 
-                    onClick={() => handleViewChange('QA_PENDING')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'QA_PENDING' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    onClick={() => handleViewChange('IQA_PENDING')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_PENDING' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                     <ClipboardList size={20} /> Pending Tasks
-                    {pendingQA.length > 0 && <span className="bg-red-500 text-white text-xs px-2 rounded-full ml-auto">{pendingQA.length}</span>}
+                    {pendingIQA.length > 0 && <span className="bg-red-500 text-white text-xs px-2 rounded-full ml-auto">{pendingIQA.length}</span>}
                 </button>
                 <button 
                     onClick={() => handleViewChange('RO_LIST')}
@@ -2916,8 +2824,8 @@ const App = () => {
                 </button>
                 
                 <button 
-                    onClick={() => handleViewChange('QA_ANALYSIS')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'QA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                    onClick={() => handleViewChange('IQA_ANALYSIS')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                     <BarChart3 size={20} /> Data Analysis
                 </button>
@@ -2932,7 +2840,7 @@ const App = () => {
                 
                 {isSectionsOpen && (
                     <div className="space-y-1 animate-fadeIn">
-                        {SECTIONS.filter(s => !s.startsWith('QA')).map(s => (
+                        {SECTIONS.filter(s => !s.startsWith('IQA')).map(s => (
                             <button 
                                 key={s}
                                 onClick={() => handleSectionSelect(s)}
@@ -2947,7 +2855,6 @@ const App = () => {
           )}
         </nav>
         
-        {/* Footer Status */}
         <div className="p-4 border-t border-gray-200 bg-gray-50">
             <button 
                 onClick={() => setUser(null)} 
@@ -2960,19 +2867,18 @@ const App = () => {
       </aside>
 
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pt-20 md:pt-8 bg-[#F8FAFC]">
         <header className="flex justify-between items-center mb-8">
            <div>
               <h2 className="text-2xl font-bold text-gray-900">
                   {view === 'DASHBOARD' ? 'Dashboard' : 
                    view === 'RO_LIST' ? 'R&O Registry List' :
-                  view.replace(/_/g, ' ')}
+                   view.replace(/_/g, ' ')}
               </h2>
               {selectedSection && <p className="text-sm text-gray-500 mt-1">Viewing as: <span className="font-bold">{selectedSection}</span></p>}
            </div>
            
-           {(!isQA || selectedSection) && (
+           {(!isIQA || selectedSection) && (
              <button 
                 onClick={() => setIsWizardOpen(true)}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition transform hover:-translate-y-0.5"
@@ -2986,10 +2892,8 @@ const App = () => {
              <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-osmak-600" size={48} /></div>
         ) : (
            <>
-             {/* Dashboard View */}
              {view === 'DASHBOARD' && (
                 <div className="space-y-8 animate-fadeIn">
-                   {/* Stats Cards - Redesigned */}
                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
                       <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
                          <div>
@@ -3032,8 +2936,7 @@ const App = () => {
                       </div>
                    </div>
 
-                   {/* Countdown Cards for Section Users - Redesigned */}
-                   {(!isQA || selectedSection) && (() => {
+                   {(!isIQA || selectedSection) && (() => {
                        const upcomingRisks = openRisks
                            .map(item => ({ item, days: getDaysRemaining(item) }))
                            .filter(data => data.days !== null)
@@ -3065,7 +2968,6 @@ const App = () => {
 
                    <div className="space-y-12">
                        <div className="space-y-4">
-                           {/* Open Risks Table Header */}
                            <div className="flex justify-between items-end mb-2">
                                <h3 className="font-bold text-gray-500 text-sm">Open Risks</h3>
                                <button onClick={() => exportCSV(openRisks, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
@@ -3086,8 +2988,7 @@ const App = () => {
                        </div>
                    </div>
 
-                   {/* Collapsible Closed Registries for QA View */}
-                   {isQA && selectedSection && (
+                   {isIQA && selectedSection && (
                        <div className="mt-8 pt-8 border-t">
                             <details className="group">
                                 <summary className="flex items-center gap-2 cursor-pointer text-gray-500 hover:text-gray-800 font-bold">
@@ -3115,14 +3016,12 @@ const App = () => {
                 </div>
              )}
 
-            {/* Combined RO_LIST View */}
             {view === 'RO_LIST' && (
                 <div className="space-y-4">
                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
                          <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><ClipboardList size={20}/> All Risks & Opportunities</h3>
                          
                          <div className="flex flex-wrap items-center gap-2">
-                             {/* Year Filter */}
                              <select 
                                 value={listFilterYear}
                                 onChange={(e) => setListFilterYear(e.target.value)}
@@ -3132,7 +3031,6 @@ const App = () => {
                                 {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                              </select>
 
-                             {/* Type Filter */}
                              <select 
                                 value={listFilterType}
                                 onChange={(e) => setListFilterType(e.target.value as any)}
@@ -3143,7 +3041,6 @@ const App = () => {
                                 <option value="OPPORTUNITY">Opportunities</option>
                              </select>
 
-                             {/* Status Filter */}
                              <select 
                                 value={listFilterStatus}
                                 onChange={(e) => setListFilterStatus(e.target.value as any)}
@@ -3162,142 +3059,19 @@ const App = () => {
                      {renderTable(filteredROList, true, false, 'BOTH', 'max-h-[500px]')}
                 </div>
             )}
-
-             {view === 'RISKS' && (
-                 <div className="space-y-12">
-                     <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b pb-2">
-                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><ShieldAlert size={20}/> Open Risk Registry</h3>
-                            <button onClick={() => exportCSV(openRisks, 'Open_Risks')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
-                        </div>
-                        {renderTable(openRisks, true)}
-                     </div>
-
-                     <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b pb-2">
-                            <h3 className="font-bold text-lg text-gray-600 flex items-center gap-2"><History size={20}/> Closed Risk Registry</h3>
-                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), 'Closed_Risks')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
-                        </div>
-                        {renderTable(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), false, true)}
-                     </div>
-                 </div>
-             )}
-
-             {view === 'OPPORTUNITIES' && (
-                 <div className="space-y-12">
-                     <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b pb-2">
-                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Lightbulb size={20}/> Open Opportunity Registry</h3>
-                            <button onClick={() => exportCSV(openOpps, 'Open_Opps')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
-                        </div>
-                        {renderTable(openOpps, true)}
-                     </div>
-
-                     <div className="space-y-4">
-                        <div className="flex justify-between items-center border-b pb-2">
-                            <h3 className="font-bold text-lg text-gray-600 flex items-center gap-2"><History size={20}/> Closed Opportunity Registry</h3>
-                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), 'Closed_Opps')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button>
-                        </div>
-                        {renderTable(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), false, true)}
-                     </div>
-                 </div>
-             )}
-
-             {/* QA Global Views */}
-             {view === 'QA_PENDING' && (
+             {view === 'IQA_PENDING' && (
                  <div className="space-y-4">
                      <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg text-indigo-800 text-sm mb-4">
                          These items require your attention for <strong>Implementation Verification</strong> or <strong>Final Verification/Closure</strong>.
                      </div>
-                     {renderTable(pendingQA, true)}
+                     {renderTable(pendingIQA, true)}
                  </div>
              )}
-             {view === 'QA_OPEN_RISKS' && (
-                 <div className="space-y-4">
-                     <div className="flex justify-end"><button onClick={() => exportCSV(allOpenRisks, 'Open_Risks')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button></div>
-                     {renderTable(allOpenRisks, true)}
-                 </div>
-             )}
-             {view === 'QA_OPEN_OPPS' && (
-                 <div className="space-y-4">
-                     <div className="flex justify-end"><button onClick={() => exportCSV(allOpenOpps, 'Open_Opportunities')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600"><Download size={16}/> Export CSV</button></div>
-                     {renderTable(allOpenOpps, true)}
-                 </div>
-             )}
-            {view === 'QA_CLOSED_RISKS' && (() => {
-                const filteredData = items.filter(i =>
-                    i.type === 'RISK' &&
-                    i.status === 'CLOSED' &&
-                    (closedFilterSection === 'ALL' || i.section === closedFilterSection)
-                );
-                return (
-                    <div className="space-y-4">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-end">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Filter by Section</label>
-                                <select
-                                    value={closedFilterSection}
-                                    onChange={e => setClosedFilterSection(e.target.value)}
-                                    className="w-full md:w-80 rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-osmak-green-dark outline-none transition text-sm bg-white"
-                                >
-                                    <option value="" disabled>Select a section to view...</option>
-                                    <option value="ALL">All Sections</option>
-                                    {SECTIONS.filter(s => !s.startsWith('QA')).map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <button
-                                onClick={() => exportCSV(filteredData, 'Closed_Risks')}
-                                disabled={!closedFilterSection || filteredData.length === 0}
-                                className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Download size={16}/> Export CSV
-                            </button>
-                        </div>
-                        {closedFilterSection !== '' && renderTable(filteredData, false, true)}
-                    </div>
-                )
-            })()}
-            {view === 'QA_CLOSED_OPPS' && (() => {
-                const filteredData = items.filter(i =>
-                    i.type === 'OPPORTUNITY' &&
-                    i.status === 'CLOSED' &&
-                    (closedFilterSection === 'ALL' || i.section === closedFilterSection)
-                );
-                return (
-                    <div className="space-y-4">
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-end">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Filter by Section</label>
-                                <select
-                                    value={closedFilterSection}
-                                    onChange={e => setClosedFilterSection(e.target.value)}
-                                    className="w-full md:w-80 rounded-lg border-gray-300 border p-2 focus:ring-2 focus:ring-osmak-green-dark outline-none transition text-sm bg-white"
-                                >
-                                    <option value="" disabled>Select a section to view...</option>
-                                    <option value="ALL">All Sections</option>
-                                    {SECTIONS.filter(s => !s.startsWith('QA')).map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <button
-                                onClick={() => exportCSV(filteredData, 'Closed_Opportunities')}
-                                disabled={!closedFilterSection || filteredData.length === 0}
-                                className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Download size={16}/> Export CSV
-                            </button>
-                        </div>
-                        {closedFilterSection !== '' && renderTable(filteredData, false, true)}
-                    </div>
-                )
-            })()}
-
-             {/* QA Analysis View */}
-             {view === 'QA_ANALYSIS' && renderAnalysisDashboard()}
+             {view === 'IQA_ANALYSIS' && renderAnalysisDashboard()}
            </>
         )}
       </main>
 
-      {/* Modals */}
       {isWizardOpen && (
         <Wizard 
           section={user || ''} 
@@ -3309,7 +3083,7 @@ const App = () => {
       {selectedItem && (
         <ItemDetailModal 
           item={selectedItem} 
-          isQA={isQA}
+          isIQA={isIQA}
           currentUser={user || ''}
           displayId={displayIdMap[selectedItem.id] || selectedItem.id}
           onClose={() => setSelectedItem(null)}

@@ -4,10 +4,10 @@
 The **OsMak Risk & Opportunities Registry System** is a digital platform designed to streamline the identification, evaluation, and management of risks and opportunities across Ospital ng Makati. It replaces spreadsheet-based submissions with a guided, ISO 9001:2015 compliant workflow.
 
 ### **Core Features**
-*   **Role-Based Access**: Distinct views for Hospital Sections and Quality Assurance (QA).
+*   **Role-Based Access**: Distinct views for Hospital Sections and Internal Quality Audit (IQA).
 *   **Automated Scoring**: Real-time calculation of Risk Ratings (Likelihood × Severity).
 *   **Guided Workflow**: Submission → Implementation → Verification → Closure.
-*   **Data Analysis**: Real-time charts and KPI tracking for both QA and Section users.
+*   **Data Analysis**: Real-time charts and KPI tracking for both IQA and Section users.
 *   **Audit Trail**: Complete history of every action taken on an entry.
 *   **Cloud Storage**: Secure data persistence via Supabase.
 
@@ -16,10 +16,10 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
 ## **2. Getting Started**
 
 ### **Login Credentials**
-*   **Section Users** (e.g., ER, Pharmacy, Nursing):
+*   **Process Owners** (e.g., ER, Pharmacy, Nursing):
     *   **Password**: `osmak123`
-*   **QA Command Center**:
-    *   **Password**: `admin123`
+*   **IQA Auditor**:
+    *   **Password**: `Lastname123` (e.g., `Alli123`)
 
 ### **User Support & Resources**
 Directly from the **Login Screen**, you can access the following resources:
@@ -29,15 +29,12 @@ Directly from the **Login Screen**, you can access the following resources:
 
 ### **Navigation Sidebar**
 *   **Dashboard**: High-level statistics and upcoming deadlines.
-*   **Registries**:
-    *   **R&O List**: A combined chronological list of all Risks and Opportunities.
-    *   **Risks**: View Open and Closed Risk tables.
-    *   **Opportunities**: View Open and Closed Opportunity tables.
+*   **R&O List**: A combined chronological list of all Risks and Opportunities with filters.
 *   **Data Analysis**: Charts and performance metrics for your role.
 
 ---
 
-## **3. Guide for Section Users**
+## **3. Guide for Process Owners**
 
 ### **A. Understanding the Dashboard**
 *   **Upcoming Deadlines**: The top of your dashboard features **Countdown Cards** for the 4 open risks with the nearest target dates.
@@ -49,13 +46,13 @@ Directly from the **Login Screen**, you can access the following resources:
 ### **B. Creating a New Entry**
 1.  Click the **"+ New Entry"** button on the top right.
 2.  Follow the 4-step wizard to input all required details.
-3.  **Action Plans** are now **MANDATORY** for **ALL** Risks (regardless of rating) and all Opportunities. You cannot submit an entry without at least one action plan.
+3.  **Action Plans** are **MANDATORY** for **ALL** Risks (regardless of rating) and all Opportunities. You cannot submit an entry without at least one action plan.
 4.  Upon submission, the entry immediately enters the **Implementation** phase.
 
 ### **C. Viewing and Sorting Lists**
-*   Navigate to the **Risks** or **Opportunities** menu to see both Open and Closed tables.
-*   Use the **R&O List** to see a combined view sorted chronologically by Reference ID (e.g., R1, R2, O1).
-*   Click on table headers like **"Date ID"**, **"Status"**, or **"Level"** to sort the list.
+*   Navigate to the **R&O List** to see a combined view sorted chronologically by Reference ID (e.g., R1, R2, O1).
+*   Use the filters to view by Year, Status (Open/Closed), or Type (Risk/Opportunity).
+*   Click on table headers like **"Date"**, **"Status"**, or **"Level"** to sort the list.
 
 ### **D. Editing an Entry**
 *   You can edit an entry while in the `IMPLEMENTATION` phase.
@@ -80,12 +77,12 @@ Directly from the **Login Screen**, you can access the following resources:
     *   When you mark it as "Completed", the system will require a **Reason for Delay**.
     *   You **cannot** submit the completion without providing this justification. This ensures compliance with ISO audit requirements.
 
-### **G. QA Verification Process**
+### **G. IQA Verification Process**
 1.  Once you submit an action as completed, its status becomes `FOR VERIFICATION`.
-2.  If all actions in an entry are completed, the entry waits for **QA Verification**.
-3.  **QA Decision**:
-    *   **Verified**: If QA confirms implementation and effectiveness, the entry is **CLOSED**.
-    *   **Rejected**: If QA marks it as "Not Implemented" or "Not Effective", the entry reverts to `IMPLEMENTATION` status. You must review the QA remarks, address the issue, and re-submit.
+2.  If all actions in an entry are completed, the entry waits for **IQA Verification**.
+3.  **IQA Decision**:
+    *   **Verified**: If IQA confirms implementation and effectiveness, the entry is **CLOSED**.
+    *   **Rejected**: If IQA marks it as "Not Implemented" or "Not Effective", the entry reverts to `IMPLEMENTATION` status. You must review the IQA remarks, address the issue, and re-submit.
 
 ### **H. Viewing the Audit Trail**
 *   In any registry table, click the **History (clock) icon** in the row of a specific item.
@@ -103,13 +100,13 @@ Directly from the **Login Screen**, you can access the following resources:
 
 ---
 
-## **4. Guide for QA Command Center**
+## **4. Guide for IQA Auditors**
 
 ### **A. Reviewing & Verifying Items**
 *   Use the **"Pending Tasks"** menu to see all items requiring your attention across the hospital.
 *   **Action Plan Verification**: You can verify individual action plans or return them for revision.
 *   **Final Verification & Closure**:
-    *   Once all actions are completed by the section, the entry moves to **QA Verification**.
+    *   Once all actions are completed by the section, the entry moves to **IQA Verification**.
     *   Review the user's **Residual Risk Assessment** and evidence.
     *   Fill out the Verification Form:
         *   **Implementation**: Select "Implemented" or "Not Implemented".
@@ -119,20 +116,19 @@ Directly from the **Login Screen**, you can access the following resources:
         *   **Verify & Close**: Marks entry as `CLOSED`.
         *   **Reject**: Reverts entry to `IMPLEMENTATION`.
 
-### **B. Viewing Closed Registries**
-1.  Navigate to **"Closed Risks"** or **"Closed Opportunities"** from the sidebar.
-2.  **Important**: The list will be empty by default to improve performance.
-3.  Use the **"Filter by Section"** dropdown to select a specific department or "All Sections". The table will populate.
-4.  You can export the currently displayed list to a detailed CSV.
+### **B. Viewing Section Registries**
+*   From the sidebar, click the **"Hospital Sections"** dropdown.
+*   Select any section to view their Dashboard and R&O List as if you were logged in as them.
+*   Click **"Exit Section View"** to return to your global dashboard.
 
 ### **C. Reopening a Closed Entry**
-*   This function is **exclusive to QA** and is used for correction of records or reactivating recurring risks.
+*   This function is **exclusive to IQA** and is used for correction of records or reactivating recurring risks.
 1.  Open any entry with a `CLOSED` status.
 2.  At the bottom, click the **"Reopen Entry"** button (next to Delete).
-3.  A confirmation dialog will appear. Enter your password (`admin123`) to confirm.
+3.  A confirmation dialog will appear. Enter your password to confirm.
 4.  The entry's status will revert to `IMPLEMENTATION` and the action will be logged in the Audit Trail.
 
-### **D. Data Analysis**
+### **D. Data Analysis (Hospital-Wide)**
 1.  Navigate to the **Data Analysis** menu.
 2.  Set the **From** and **To** dates to filter the dataset.
 3.  View Key Performance Indicators (Total vs Active vs Closed) for both Risks and Opportunities.
@@ -145,6 +141,6 @@ Directly from the **Login Screen**, you can access the following resources:
 | Status | Description |
 | :--- | :--- |
 | **IMPLEMENTATION** | Entry submitted. Section is executing actions. |
-| **FOR VERIFICATION** | Section marked action as done. QA is reviewing evidence. |
-| **QA VERIFICATION** | All actions completed. QA performing final effectiveness review. |
-| **CLOSED** | Process verified effective and formally closed by QA. |
+| **FOR VERIFICATION** | Section marked action as done. IQA is reviewing evidence. |
+| **IQA VERIFICATION** | All actions completed. IQA performing final effectiveness review. |
+| **CLOSED** | Process verified effective and formally closed by IQA. |
