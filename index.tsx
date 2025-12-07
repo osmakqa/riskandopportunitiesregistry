@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -60,7 +60,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type EntryType = 'RISK' | 'OPPORTUNITY';
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
-// Renamed QA_VERIFICATION to IQA_VERIFICATION
 type WorkflowStatus = 'IMPLEMENTATION' | 'REASSESSMENT' | 'IQA_VERIFICATION' | 'CLOSED';
 type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
 
@@ -121,12 +120,6 @@ interface RegistryItem {
   auditTrail: AuditEvent[];
 }
 
-interface DonutChartProps {
-  title: string;
-  data: Record<string, number>;
-  colors: Record<string, string>;
-}
-
 // --- Data Mapping Helpers (CamelCase <-> SnakeCase) ---
 
 const mapToDb = (item: RegistryItem) => ({
@@ -161,11 +154,10 @@ const mapToDb = (item: RegistryItem) => ({
 const mapFromDb = (dbItem: any): RegistryItem => {
   let trail: AuditEvent[] = typeof dbItem.audit_trail === 'string' ? JSON.parse(dbItem.audit_trail) : (dbItem.audit_trail || []);
   
-  // Clone trail to avoid mutating the original if needed
+  // Clone trail to avoid mutating the original
   trail = [...trail];
 
   // Sync the first audit event (usually creation) with the database 'created_at' column
-  // This allows manual DB edits to created_at to be reflected in the audit trail UI
   if (trail.length > 0 && dbItem.created_at) {
       trail[0] = { ...trail[0], timestamp: dbItem.created_at };
   }
@@ -174,7 +166,6 @@ const mapFromDb = (dbItem: any): RegistryItem => {
   if (dbItem.status === 'CLOSED' && dbItem.closed_at && trail.length > 0) {
       const lastIdx = trail.length - 1;
       const lastEvent = trail[lastIdx];
-      // Only update if it looks like a closing/verifying event
       if (lastEvent.event.toLowerCase().includes('closed') || lastEvent.event.toLowerCase().includes('verified')) {
           trail[lastIdx] = { ...lastEvent, timestamp: dbItem.closed_at };
       }
@@ -431,13 +422,22 @@ const getDaysRemaining = (item: RegistryItem): { days: number, label: string, co
 
 // --- Components ---
 
-const AppHeader = ({ title, subtitle, centered = false, small = false }: { title: string, subtitle: string, centered?: boolean, small?: boolean }) => (
+const AppHeader = ({ title, subtitle, centered = false, small = false, onRefresh }: { title: string, subtitle: string, centered?: boolean, small?: boolean, onRefresh?: () => void }) => (
   <header className={`sticky ${small ? 'h-16 px-4' : 'h-20 px-7'} top-0 z-50 flex items-center gap-3 bg-osmak-green text-white py-3 shadow-header w-full ${centered ? 'justify-center' : ''}`}>
     <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="OsMak Logo" className={`${small ? 'h-10' : 'h-14'} w-auto object-contain`} />
-    <div className="flex flex-col justify-center">
+    <div className="flex flex-col justify-center flex-1">
       <h1 className={`text-white ${small ? 'text-xs' : 'text-xl'} font-extrabold tracking-wide uppercase leading-tight`}>{title}</h1>
       <span className={`text-white ${small ? 'text-[0.65rem]' : 'text-sm'} opacity-90 tracking-wider`}>{subtitle}</span>
     </div>
+    {onRefresh && (
+      <button 
+        onClick={onRefresh} 
+        className="p-2 hover:bg-green-700 rounded-full transition-colors text-white"
+        title="Refresh Data"
+      >
+        <RefreshCw size={20} />
+      </button>
+    )}
   </header>
 );
 
@@ -673,7 +673,7 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">A. Reviewing & Verifying Items</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring attention.</li>
+                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring your attention.</li>
                            <li><strong>Action Plan Verification:</strong> Verify individual plans or return for revision.</li>
                            <li><strong>Final Verification & Closure:</strong>
                                 <ul className="list-[circle] pl-5 mt-1 space-y-1 text-xs">
@@ -913,9 +913,7 @@ const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[], onCl
     const formatTimestamp = (ts: string) => {
         if (!ts) return '';
         const date = new Date(ts);
-        // Check for invalid date
         if (isNaN(date.getTime())) return ts;
-        
         return date.toLocaleString('en-US', { 
             year: 'numeric', 
             month: 'short', 
@@ -985,7 +983,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
       {showManual && <UserManualModal onClose={() => setShowManual(false)} />}
       
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" />
+        <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" centered small />
         
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
@@ -1062,3 +1060,639 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
     </div>
   );
 };
+
+const Dashboard = ({ items, section, isIQA }: { items: RegistryItem[], section: string, isIQA: boolean }) => {
+  const displayIds = useMemo(() => getDisplayIds(items), [items]);
+  
+  // Filter items based on role
+  const relevantItems = useMemo(() => {
+     if (isIQA && section === 'All') return items;
+     if (isIQA) return items.filter(i => i.section === section);
+     return items.filter(i => i.section === section);
+  }, [items, section, isIQA]);
+
+  const openItems = relevantItems.filter(i => i.status !== 'CLOSED');
+  const openRisks = openItems.filter(i => i.type === 'RISK');
+  const openOpps = openItems.filter(i => i.type === 'OPPORTUNITY');
+
+  // Logic for countdown cards (Risks only)
+  const upcomingRisks = openRisks
+    .map(item => {
+        const activePlans = item.actionPlans.filter(p => p.status !== 'COMPLETED');
+        if (activePlans.length === 0) return null;
+        const targetDates = activePlans.map(p => new Date(p.targetDate).getTime());
+        const nearest = Math.min(...targetDates);
+        return { item, date: nearest };
+    })
+    .filter((x): x is { item: RegistryItem, date: number } => x !== null)
+    .sort((a, b) => a.date - b.date)
+    .slice(0, 4);
+
+  return (
+    <div className="space-y-8 animate-fadeIn">
+       <div className="flex items-center justify-between">
+         <h2 className="text-2xl font-bold text-gray-800">
+             {isIQA && section === 'All' ? 'Global Dashboard' : `${section} Dashboard`}
+         </h2>
+         <div className="text-sm text-gray-500 flex items-center gap-2">
+             <Calendar size={16}/> {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+         </div>
+       </div>
+
+       {/* Countdown Cards */}
+       {upcomingRisks.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {upcomingRisks.map(({ item, date }) => {
+                  const now = new Date().getTime();
+                  const diff = date - now;
+                  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+                  let bg = 'bg-white';
+                  let text = 'text-gray-800';
+                  let status = 'Due Soon';
+                  
+                  if (days < 0) { bg = 'bg-red-50 border-red-200'; text = 'text-red-700'; status = 'Overdue'; }
+                  else if (days < 7) { bg = 'bg-orange-50 border-orange-200'; text = 'text-orange-700'; status = 'Urgent'; }
+                  else { bg = 'bg-green-50 border-green-200'; text = 'text-green-700'; status = 'On Track'; }
+
+                  return (
+                      <div key={item.id} className={`${bg} border p-4 rounded-xl shadow-sm flex flex-col gap-2`}>
+                          <div className="flex justify-between items-start">
+                             <span className="font-bold text-xs bg-gray-200 px-2 py-1 rounded text-gray-600">{displayIds[item.id]}</span>
+                             <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-white/50 border ${text}`}>{status}</span>
+                          </div>
+                          <div className="flex-1">
+                              <h4 className="font-medium text-sm line-clamp-2 leading-tight">{item.description}</h4>
+                          </div>
+                          <div className="mt-2 text-xs font-semibold flex items-center gap-1">
+                              <Clock size={12} />
+                              {days < 0 ? `${Math.abs(days)} days overdue` : `${days} days remaining`}
+                          </div>
+                      </div>
+                  )
+              })}
+          </div>
+       )}
+
+       {/* Stacks */}
+       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+              <div className="p-4 border-b bg-red-50 flex justify-between items-center">
+                  <h3 className="font-bold text-red-900 flex items-center gap-2"><AlertTriangle size={18}/> Open Risks ({openRisks.length})</h3>
+              </div>
+              <div className="overflow-y-auto max-h-[400px]">
+                 {openRisks.length === 0 ? (
+                     <div className="p-8 text-center text-gray-400">No open risks found.</div>
+                 ) : (
+                     <table className="w-full text-left text-sm">
+                         <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                             <tr>
+                                 <th className="p-3 font-medium">ID</th>
+                                 <th className="p-3 font-medium">Description</th>
+                                 <th className="p-3 font-medium">Level</th>
+                                 <th className="p-3 font-medium">Status</th>
+                             </tr>
+                         </thead>
+                         <tbody className="divide-y">
+                             {openRisks.map(item => (
+                                 <tr key={item.id} className="hover:bg-gray-50">
+                                     <td className="p-3 font-mono text-xs">{displayIds[item.id]}</td>
+                                     <td className="p-3 max-w-[200px] truncate">{item.description}</td>
+                                     <td className="p-3"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getRiskColor(item.riskLevel)}`}>{item.riskLevel}</span></td>
+                                     <td className="p-3"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getPillColor(item.status)}`}>{formatStatus(item.status)}</span></td>
+                                 </tr>
+                             ))}
+                         </tbody>
+                     </table>
+                 )}
+              </div>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+              <div className="p-4 border-b bg-blue-50 flex justify-between items-center">
+                  <h3 className="font-bold text-blue-900 flex items-center gap-2"><Lightbulb size={18}/> Open Opportunities ({openOpps.length})</h3>
+              </div>
+              <div className="overflow-y-auto max-h-[400px]">
+                 {openOpps.length === 0 ? (
+                     <div className="p-8 text-center text-gray-400">No open opportunities found.</div>
+                 ) : (
+                     <table className="w-full text-left text-sm">
+                         <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                             <tr>
+                                 <th className="p-3 font-medium">ID</th>
+                                 <th className="p-3 font-medium">Description</th>
+                                 <th className="p-3 font-medium">Benefit</th>
+                                 <th className="p-3 font-medium">Status</th>
+                             </tr>
+                         </thead>
+                         <tbody className="divide-y">
+                             {openOpps.map(item => (
+                                 <tr key={item.id} className="hover:bg-gray-50">
+                                     <td className="p-3 font-mono text-xs">{displayIds[item.id]}</td>
+                                     <td className="p-3 max-w-[200px] truncate">{item.description}</td>
+                                     <td className="p-3 max-w-[150px] truncate text-gray-500">{item.expectedBenefit}</td>
+                                     <td className="p-3"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getPillColor(item.status)}`}>{formatStatus(item.status)}</span></td>
+                                 </tr>
+                             ))}
+                         </tbody>
+                     </table>
+                 )}
+              </div>
+          </div>
+       </div>
+    </div>
+  )
+};
+
+const RegistryList = ({ items, section, isIQA, onView, onEdit, onDelete, onHistory, onReopen }: any) => {
+   const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
+   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, OPEN, CLOSED
+   const [filterType, setFilterType] = useState('ALL');
+   const displayIds = useMemo(() => getDisplayIds(items), [items]);
+
+   const filteredItems = items.filter((i: RegistryItem) => {
+       if (!isIQA && i.section !== section) return false;
+       if (isIQA && section !== 'All' && i.section !== section) return false;
+       
+       const year = new Date(i.createdAt).getFullYear().toString();
+       if (filterYear !== 'All' && year !== filterYear) return false;
+
+       if (filterStatus === 'OPEN' && i.status === 'CLOSED') return false;
+       if (filterStatus === 'CLOSED' && i.status !== 'CLOSED') return false;
+
+       if (filterType !== 'ALL' && i.type !== filterType) return false;
+
+       return true;
+   }).sort((a: RegistryItem, b: RegistryItem) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+   return (
+      <div className="space-y-4 animate-fadeIn">
+         <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+             <div className="flex items-center gap-2">
+                 <Filter size={16} className="text-gray-400"/>
+                 <span className="text-sm font-medium text-gray-700">Filters:</span>
+             </div>
+             <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="text-sm border rounded px-2 py-1 bg-gray-50">
+                 <option value="All">All Years</option>
+                 <option value="2024">2024</option>
+                 <option value="2025">2025</option>
+             </select>
+             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-sm border rounded px-2 py-1 bg-gray-50">
+                 <option value="ALL">All Status</option>
+                 <option value="OPEN">Active</option>
+                 <option value="CLOSED">Closed</option>
+             </select>
+             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-sm border rounded px-2 py-1 bg-gray-50">
+                 <option value="ALL">All Types</option>
+                 <option value="RISK">Risks</option>
+                 <option value="OPPORTUNITY">Opportunities</option>
+             </select>
+         </div>
+
+         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+             <table className="w-full text-left text-sm">
+                 <thead className="bg-gray-100 text-gray-600 border-b">
+                     <tr>
+                         <th className="p-4 font-semibold w-16">ID</th>
+                         <th className="p-4 font-semibold w-24">Date</th>
+                         <th className="p-4 font-semibold">Description</th>
+                         <th className="p-4 font-semibold">Process / Source</th>
+                         <th className="p-4 font-semibold w-32">Level</th>
+                         <th className="p-4 font-semibold w-32">Status</th>
+                         <th className="p-4 font-semibold w-32 text-right">Actions</th>
+                     </tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-100">
+                     {filteredItems.map((item: RegistryItem) => (
+                         <tr key={item.id} className="hover:bg-gray-50 group transition">
+                             <td className="p-4 font-mono font-medium text-gray-500">{displayIds[item.id]}</td>
+                             <td className="p-4 text-gray-500 text-xs">{new Date(item.createdAt).toLocaleDateString()}</td>
+                             <td className="p-4">
+                                 <p className="line-clamp-2 font-medium text-gray-800">{item.description}</p>
+                             </td>
+                             <td className="p-4 text-xs text-gray-500">
+                                 <div className="font-medium">{item.process}</div>
+                                 <div className="opacity-75">{item.source}</div>
+                             </td>
+                             <td className="p-4">
+                                 {item.type === 'RISK' ? (
+                                    <span className={`text-[10px] px-2 py-1 rounded-full font-bold border ${getRiskColor(item.riskLevel)}`}>{item.riskLevel}</span>
+                                 ) : (
+                                    <span className="text-[10px] px-2 py-1 rounded-full font-bold bg-blue-100 text-blue-700">OPPORTUNITY</span>
+                                 )}
+                             </td>
+                             <td className="p-4">
+                                 <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getPillColor(item.status)}`}>{formatStatus(item.status)}</span>
+                             </td>
+                             <td className="p-4 text-right">
+                                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                     <button onClick={() => onHistory(item)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600" title="History"><Clock size={16}/></button>
+                                     <button onClick={() => onEdit(item)} className="p-2 hover:bg-blue-50 rounded-full text-blue-400 hover:text-blue-600" title="View/Edit"><Pencil size={16}/></button>
+                                     {isIQA && item.status === 'CLOSED' && (
+                                         <button onClick={() => onReopen(item)} className="p-2 hover:bg-orange-50 rounded-full text-orange-400 hover:text-orange-600" title="Reopen"><RotateCcw size={16}/></button>
+                                     )}
+                                     {isIQA && (
+                                         <button onClick={() => onDelete(item)} className="p-2 hover:bg-red-50 rounded-full text-red-400 hover:text-red-600" title="Delete"><Trash2 size={16}/></button>
+                                     )}
+                                 </div>
+                             </td>
+                         </tr>
+                     ))}
+                 </tbody>
+             </table>
+             {filteredItems.length === 0 && (
+                 <div className="p-10 text-center text-gray-400">No records found matching filters.</div>
+             )}
+         </div>
+      </div>
+   )
+};
+
+const EntryWizard = ({ onClose, onSubmit, section }: { onClose: () => void, onSubmit: (item: any) => void, section: string }) => {
+    const [step, setStep] = useState(1);
+    const [type, setType] = useState<EntryType>('RISK');
+    const [formData, setFormData] = useState<Partial<RegistryItem>>({
+        section,
+        process: '',
+        source: SOURCES[0],
+        description: '',
+        type: 'RISK',
+        likelihood: 1,
+        severity: 1,
+        riskRating: 1,
+        riskLevel: 'LOW',
+        actionPlans: []
+    });
+
+    const handleNext = () => setStep(s => s + 1);
+    const handleBack = () => setStep(s => s - 1);
+    
+    const updateRisk = (l: number, s: number) => {
+        const rating = l * s;
+        let level: RiskLevel = 'LOW';
+        if (rating >= 16) level = 'CRITICAL';
+        else if (rating >= 11) level = 'HIGH';
+        else if (rating >= 6) level = 'MODERATE';
+        
+        setFormData(prev => ({ ...prev, likelihood: l, severity: s, riskRating: rating, riskLevel: level }));
+    };
+
+    const addActionPlan = () => {
+        const newPlan: ActionPlan = {
+            id: crypto.randomUUID(),
+            strategy: 'Mitigate',
+            description: '',
+            evidence: '',
+            responsiblePerson: '',
+            targetDate: '',
+            status: 'PENDING_APPROVAL'
+        };
+        setFormData(prev => ({ ...prev, actionPlans: [...(prev.actionPlans || []), newPlan] }));
+    };
+
+    const updateActionPlan = (index: number, field: string, value: string) => {
+        const plans = [...(formData.actionPlans || [])];
+        plans[index] = { ...plans[index], [field]: value };
+        setFormData(prev => ({ ...prev, actionPlans: plans }));
+    };
+
+    const removeActionPlan = (index: number) => {
+        const plans = [...(formData.actionPlans || [])];
+        plans.splice(index, 1);
+        setFormData(prev => ({ ...prev, actionPlans: plans }));
+    };
+
+    const handleSubmit = () => {
+        if (!formData.description || !formData.process) return alert('Please fill in all required fields.');
+        if ((formData.actionPlans || []).length === 0) return alert('At least one Action Plan is mandatory.');
+        onSubmit(formData);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fadeIn">
+                <div className="p-6 border-b bg-gray-50 flex justify-between items-center rounded-t-xl">
+                    <h2 className="text-xl font-bold text-gray-800">New {type === 'RISK' ? 'Risk' : 'Opportunity'} Entry</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-8">
+                    {/* Progress Bar */}
+                    <div className="flex items-center mb-8 px-4">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="flex-1 flex flex-col items-center relative">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= i ? 'bg-osmak-green text-white' : 'bg-gray-200 text-gray-500'}`}>
+                                    {i}
+                                </div>
+                                <div className="text-[10px] mt-1 text-gray-500 uppercase font-medium">
+                                    {i===1 ? 'General' : i===2 ? 'Assessment' : 'Actions'}
+                                </div>
+                                {i < 3 && <div className={`absolute top-4 left-[50%] w-full h-0.5 ${step > i ? 'bg-osmak-green' : 'bg-gray-200'} -z-10`}></div>}
+                            </div>
+                        ))}
+                    </div>
+
+                    {step === 1 && (
+                        <div className="space-y-4">
+                             <div className="flex gap-4 p-1 bg-gray-100 rounded-lg">
+                                <button type="button" onClick={() => { setType('RISK'); setFormData(p=>({...p, type:'RISK'})); }} className={`flex-1 py-2 rounded font-bold text-sm transition ${type === 'RISK' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`}>RISK</button>
+                                <button type="button" onClick={() => { setType('OPPORTUNITY'); setFormData(p=>({...p, type:'OPPORTUNITY'})); }} className={`flex-1 py-2 rounded font-bold text-sm transition ${type === 'OPPORTUNITY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>OPPORTUNITY</button>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Process / Activity</label>
+                                <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-osmak-green outline-none" 
+                                    value={formData.process} onChange={e => setFormData({...formData, process: e.target.value})} placeholder="e.g. Patient Admission" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+                                <select className="w-full border p-2 rounded focus:ring-2 focus:ring-osmak-green outline-none"
+                                    value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})}>
+                                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-osmak-green outline-none h-24" 
+                                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 2 && (
+                        <div className="space-y-6">
+                            {type === 'RISK' ? (
+                                <div className="bg-red-50 p-6 rounded-xl border border-red-100 space-y-6">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="font-bold text-red-800">Risk Assessment</h3>
+                                        <div className={`px-4 py-2 rounded-lg font-bold border ${getRiskColor(formData.riskLevel)}`}>
+                                            Rating: {formData.riskRating} ({formData.riskLevel})
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex justify-between">
+                                            <span>Likelihood (1-5)</span>
+                                            <span className="font-normal text-gray-500">{LIKELIHOOD_DESC[formData.likelihood || 1]}</span>
+                                        </label>
+                                        <input type="range" min="1" max="5" value={formData.likelihood} 
+                                            onChange={e => updateRisk(parseInt(e.target.value), formData.severity || 1)}
+                                            className="w-full accent-red-600 cursor-pointer" />
+                                        <div className="flex justify-between text-xs text-gray-400 mt-1"><span>1</span><span>5</span></div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex justify-between">
+                                            <span>Severity (1-5)</span>
+                                            <span className="font-normal text-gray-500">{SEVERITY_DESC[formData.severity || 1]}</span>
+                                        </label>
+                                        <input type="range" min="1" max="5" value={formData.severity} 
+                                            onChange={e => updateRisk(formData.likelihood || 1, parseInt(e.target.value))}
+                                            className="w-full accent-red-600 cursor-pointer" />
+                                        <div className="flex justify-between text-xs text-gray-400 mt-1"><span>1</span><span>5</span></div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 space-y-4">
+                                     <h3 className="font-bold text-blue-800">Opportunity Assessment</h3>
+                                     <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Expected Benefit</label>
+                                        <textarea className="w-full border p-2 rounded outline-none h-20" 
+                                            value={formData.expectedBenefit} onChange={e => setFormData({...formData, expectedBenefit: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Feasibility</label>
+                                        <select className="w-full border p-2 rounded outline-none"
+                                            value={formData.feasibility || 'MEDIUM'} onChange={e => setFormData({...formData, feasibility: e.target.value as any})}>
+                                            <option value="LOW">Low</option>
+                                            <option value="MEDIUM">Medium</option>
+                                            <option value="HIGH">High</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {step === 3 && (
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="font-bold text-gray-800">Action Plans</h3>
+                                <button onClick={addActionPlan} className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full flex items-center gap-1 font-medium transition">
+                                    <PlusCircle size={14}/> Add Plan
+                                </button>
+                            </div>
+                            {(formData.actionPlans || []).length === 0 && (
+                                <div className="p-6 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-400">
+                                    No action plans added. Please add at least one.
+                                </div>
+                            )}
+                            {(formData.actionPlans || []).map((plan, i) => (
+                                <div key={i} className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative group">
+                                    <button onClick={() => removeActionPlan(i)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
+                                        <XCircle size={18}/>
+                                    </button>
+                                    <div className="grid grid-cols-2 gap-4 mb-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500">Strategy</label>
+                                            <select className="w-full text-sm border p-1 rounded" 
+                                                value={plan.strategy} onChange={e => updateActionPlan(i, 'strategy', e.target.value)}>
+                                                {Object.keys(type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES).map(k => <option key={k} value={k}>{k}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500">Target Date</label>
+                                            <input type="date" className="w-full text-sm border p-1 rounded"
+                                                value={plan.targetDate} onChange={e => updateActionPlan(i, 'targetDate', e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500">Action Description</label>
+                                        <input type="text" className="w-full text-sm border p-1 rounded" placeholder="What will be done?"
+                                            value={plan.description} onChange={e => updateActionPlan(i, 'description', e.target.value)} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-4 border-t bg-white rounded-b-xl flex justify-between">
+                    {step > 1 ? (
+                        <button onClick={handleBack} className="px-6 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Back</button>
+                    ) : <div></div>}
+                    
+                    {step < 3 ? (
+                        <button onClick={handleNext} className="bg-osmak-green text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition">Next</button>
+                    ) : (
+                        <button onClick={handleSubmit} className="bg-osmak-green text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 transition shadow-lg shadow-green-200">Submit Entry</button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const App = () => {
+    const [user, setUser] = useState<string | null>(null);
+    const [items, setItems] = useState<RegistryItem[]>([]);
+    const [view, setView] = useState('dashboard');
+    const [loading, setLoading] = useState(false);
+    
+    // Modal States
+    const [showWizard, setShowWizard] = useState(false);
+    const [showManual, setShowManual] = useState(false);
+    const [showTrail, setShowTrail] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
+    const [trailItem, setTrailItem] = useState<RegistryItem | null>(null);
+
+    const isIQA = IQA_USERS.includes(user || '');
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase.from('registry_items').select('*');
+        if (!error && data) {
+            const mapped = data.map(mapFromDb);
+            setItems(mapped);
+
+            // Sync open modals with fresh data
+            if (selectedItem) {
+                const freshSelected = mapped.find(i => i.id === selectedItem.id);
+                if (freshSelected) setSelectedItem(freshSelected);
+            }
+            if (trailItem) {
+                const freshTrail = mapped.find(i => i.id === trailItem.id);
+                if (freshTrail) setTrailItem(freshTrail);
+            }
+        }
+        setLoading(false);
+    }, [selectedItem, trailItem]);
+
+    // Realtime Subscription
+    useEffect(() => {
+        const channel = supabase.channel('realtime_registry')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'registry_items' }, () => {
+                fetchData();
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [fetchData]);
+
+    // Initial Fetch on Login
+    useEffect(() => {
+        if (user) fetchData();
+    }, [user, fetchData]);
+
+    const handleCreate = async (newItem: Partial<RegistryItem>) => {
+        setLoading(true);
+        const item: RegistryItem = {
+            id: crypto.randomUUID(),
+            ...newItem as any,
+            status: 'IMPLEMENTATION',
+            createdAt: new Date().toISOString(),
+            auditTrail: []
+        };
+        const withAudit = addAuditEvent(item, 'Entry Created', user!);
+        
+        const { error } = await supabase.from('registry_items').insert(mapToDb(withAudit));
+        if (!error) {
+            setShowWizard(false);
+            fetchData();
+        } else {
+            alert('Error creating entry');
+        }
+        setLoading(false);
+    };
+
+    const handleDelete = async (item: RegistryItem) => {
+        if (!confirm('Are you sure you want to delete this entry? This cannot be undone.')) return;
+        const { error } = await supabase.from('registry_items').delete().eq('id', item.id);
+        if (!error) fetchData();
+    };
+
+    const handleReopen = async (item: RegistryItem) => {
+        const pass = prompt('Enter IQA Password to Reopen:');
+        // Simplified check for demo
+        if (pass !== 'admin123') return alert('Invalid password');
+        
+        const updated = addAuditEvent({ ...item, status: 'IMPLEMENTATION' }, 'Entry Reopened', user!);
+        const { error } = await supabase.from('registry_items').update(mapToDb(updated)).eq('id', item.id);
+        if (!error) fetchData();
+    };
+
+    if (!user) return <Login onLogin={setUser} />;
+
+    return (
+        <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
+            {/* Sidebar */}
+            <aside className="w-64 bg-osmak-green flex flex-col shadow-2xl z-20 hidden md:flex">
+                <SidebarHeader onClose={() => {}} />
+                <nav className="flex-1 px-3 py-6 space-y-2">
+                    <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view==='dashboard' ? 'bg-white/10 text-white font-bold shadow-inner' : 'text-green-100 hover:bg-green-700/50'}`}>
+                        <LayoutDashboard size={20}/> Dashboard
+                    </button>
+                    <button onClick={() => setView('list')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view==='list' ? 'bg-white/10 text-white font-bold shadow-inner' : 'text-green-100 hover:bg-green-700/50'}`}>
+                        <ListFilter size={20}/> R&O List
+                    </button>
+                    <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view==='analysis' ? 'bg-white/10 text-white font-bold shadow-inner' : 'text-green-100 hover:bg-green-700/50'}`}>
+                        <BarChart3 size={20}/> Data Analysis
+                    </button>
+                </nav>
+                <div className="p-4 bg-green-900/30">
+                    <div className="flex items-center gap-3 text-green-100 mb-4">
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs">{user.charAt(0)}</div>
+                        <div className="text-xs font-medium truncate flex-1">{user}</div>
+                    </div>
+                    <button onClick={() => setUser(null)} className="w-full flex items-center justify-center gap-2 text-xs bg-red-500/80 hover:bg-red-600 text-white py-2 rounded transition">
+                        <LogOut size={14}/> Sign Out
+                    </button>
+                </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 flex flex-col overflow-hidden relative">
+                <AppHeader title={view.replace(/_/g, ' ')} subtitle={`Logged in as: ${user}`} onRefresh={fetchData} />
+                
+                <div className="flex-1 overflow-y-auto p-6 md:p-10 relative">
+                    {/* Floating Action Button */}
+                    {!isIQA && (
+                        <button onClick={() => setShowWizard(true)} className="fixed bottom-8 right-8 bg-osmak-green text-white p-4 rounded-full shadow-2xl hover:bg-green-700 hover:scale-110 transition z-40 flex items-center gap-2 group">
+                            <PlusCircle size={24}/> <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 font-bold whitespace-nowrap">New Entry</span>
+                        </button>
+                    )}
+
+                    {view === 'dashboard' && <Dashboard items={items} section={isIQA ? 'All' : user} isIQA={isIQA} />}
+                    
+                    {view === 'list' && (
+                        <RegistryList 
+                            items={items} 
+                            section={isIQA ? 'All' : user} 
+                            isIQA={isIQA} 
+                            onView={(i: any) => setSelectedItem(i)}
+                            onEdit={(i: any) => setSelectedItem(i)}
+                            onDelete={handleDelete}
+                            onHistory={(i: any) => { setTrailItem(i); setShowTrail(true); }}
+                            onReopen={handleReopen}
+                        />
+                    )}
+
+                    {view === 'analysis' && (
+                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                             <BarChart3 size={64} className="mb-4 text-gray-300"/>
+                             <h3 className="text-xl font-bold">Data Analysis Module</h3>
+                             <p>Analytics charts will appear here.</p>
+                        </div>
+                    )}
+                </div>
+            </main>
+
+            {/* Modals */}
+            {showWizard && <EntryWizard onClose={() => setShowWizard(false)} onSubmit={handleCreate} section={user || ''} />}
+            {showManual && <UserManualModal onClose={() => setShowManual(false)} />}
+            {showTrail && trailItem && <AuditTrailModal trail={trailItem.auditTrail} itemId={trailItem.id.substring(0,8)} onClose={() => setShowTrail(false)} />}
+        </div>
+    );
+};
+
+const root = createRoot(document.getElementById('root')!);
+root.render(<App />);
