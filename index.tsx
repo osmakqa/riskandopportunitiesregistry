@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -46,7 +46,8 @@ import {
   X,
   Video,
   Sparkles,
-  Bot
+  Bot,
+  RefreshCw
 } from 'lucide-react';
 
 // --- Supabase Configuration ---
@@ -2489,7 +2490,7 @@ const App = () => {
     return Array.from(years).sort().reverse();
   }, [items]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('registry_items').select('*');
@@ -2505,11 +2506,29 @@ const App = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (user) fetchData();
-  }, [user]);
+    if (user) {
+        fetchData();
+        
+        const channel = supabase
+          .channel('registry_db_changes')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'registry_items' },
+            (payload) => {
+              console.log('Realtime change detected:', payload);
+              fetchData();
+            }
+          )
+          .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        }
+    }
+  }, [user, fetchData]);
 
   const handleCreate = async (newItem: Partial<RegistryItem>) => {
     const initialEvent: AuditEvent = {
@@ -3239,14 +3258,24 @@ const App = () => {
               {selectedSection && <p className="text-sm text-gray-500 mt-1">Viewing as: <span className="font-bold">{selectedSection}</span></p>}
            </div>
            
-           {(!isIQA || selectedSection) && (
-             <button 
-                onClick={() => setIsWizardOpen(true)}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition transform hover:-translate-y-0.5"
-             >
-                <PlusCircle size={18} /> <span className="hidden sm:inline">New Entry</span>
-             </button>
-           )}
+           <div className="flex items-center gap-2">
+                <button 
+                    onClick={fetchData}
+                    className="p-2 text-gray-500 hover:text-osmak-green hover:bg-green-50 rounded-full transition-colors"
+                    title="Refresh Data"
+                >
+                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                </button>
+
+               {(!isIQA || selectedSection) && (
+                 <button 
+                    onClick={() => setIsWizardOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition transform hover:-translate-y-0.5"
+                 >
+                    <PlusCircle size={18} /> <span className="hidden sm:inline">New Entry</span>
+                 </button>
+               )}
+           </div>
         </header>
 
         {loading ? (
