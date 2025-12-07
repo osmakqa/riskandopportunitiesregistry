@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -60,6 +60,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type EntryType = 'RISK' | 'OPPORTUNITY';
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+// Renamed QA_VERIFICATION to IQA_VERIFICATION
 type WorkflowStatus = 'IMPLEMENTATION' | 'REASSESSMENT' | 'IQA_VERIFICATION' | 'CLOSED';
 type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
 
@@ -120,6 +121,12 @@ interface RegistryItem {
   auditTrail: AuditEvent[];
 }
 
+interface DonutChartProps {
+  title: string;
+  data: Record<string, number>;
+  colors: Record<string, string>;
+}
+
 // --- Data Mapping Helpers (CamelCase <-> SnakeCase) ---
 
 const mapToDb = (item: RegistryItem) => ({
@@ -152,52 +159,57 @@ const mapToDb = (item: RegistryItem) => ({
 });
 
 const mapFromDb = (dbItem: any): RegistryItem => {
-  let trail: AuditEvent[] = typeof dbItem.audit_trail === 'string' ? JSON.parse(dbItem.audit_trail) : (dbItem.audit_trail || []);
-  
-  // Clone trail to avoid mutating the original
-  trail = [...trail];
-
-  // Sync the first audit event (usually creation) with the database 'created_at' column
-  if (trail.length > 0 && dbItem.created_at) {
-      trail[0] = { ...trail[0], timestamp: dbItem.created_at };
+  let trail: AuditEvent[] = [];
+  try {
+      trail = typeof dbItem.audit_trail === 'string' ? JSON.parse(dbItem.audit_trail) : (dbItem.audit_trail || []);
+  } catch (e) {
+      console.error("Error parsing audit trail", e);
+      trail = [];
   }
 
-  // Sync the last audit event with 'closed_at' if the item is closed
-  if (dbItem.status === 'CLOSED' && dbItem.closed_at && trail.length > 0) {
-      const lastIdx = trail.length - 1;
-      const lastEvent = trail[lastIdx];
-      if (lastEvent.event.toLowerCase().includes('closed') || lastEvent.event.toLowerCase().includes('verified')) {
-          trail[lastIdx] = { ...lastEvent, timestamp: dbItem.closed_at };
+  // SYNC AUDIT TRAIL TIMESTAMPS WITH DB COLUMNS
+  // This ensures that if created_at is edited in Supabase, the "Entry Created" event reflects that date.
+  if (dbItem.created_at) {
+      const idx = trail.findIndex(e => e.event === 'Entry Created');
+      if (idx !== -1) {
+          trail[idx] = { ...trail[idx], timestamp: dbItem.created_at };
+      }
+  }
+  
+  if (dbItem.closed_at) {
+      const idx = trail.findIndex(e => e.event === 'Entry Validated and Closed' || e.event.includes('Closed'));
+      if (idx !== -1) {
+          trail[idx] = { ...trail[idx], timestamp: dbItem.closed_at };
       }
   }
 
   return {
-    id: dbItem.id,
-    section: dbItem.section,
-    dateIdentified: dbItem.date_identified || '',
-    process: dbItem.process || '',
-    source: dbItem.source || '',
-    description: dbItem.description || '',
-    type: dbItem.type,
-    impactQMS: dbItem.impact_qms,
-    likelihood: dbItem.likelihood,
-    severity: dbItem.severity,
-    riskRating: dbItem.risk_rating,
-    riskLevel: dbItem.risk_level,
-    existingControls: dbItem.existing_controls,
-    expectedBenefit: dbItem.expected_benefit,
-    feasibility: dbItem.feasibility,
-    actionPlans: (dbItem.action_plans || []) as ActionPlan[],
-    residualLikelihood: dbItem.residual_likelihood,
-    residualSeverity: dbItem.residual_severity,
-    residualRiskRating: dbItem.residual_risk_rating,
-    residualRiskLevel: dbItem.residual_risk_level,
-    effectivenessRemarks: dbItem.effectiveness_remarks,
-    reassessmentDate: dbItem.reassessment_date,
-    status: dbItem.status,
-    createdAt: dbItem.created_at || new Date().toISOString(),
-    closedAt: dbItem.closed_at,
-    auditTrail: trail
+      id: dbItem.id,
+      section: dbItem.section,
+      dateIdentified: dbItem.date_identified || '',
+      process: dbItem.process || '',
+      source: dbItem.source || '',
+      description: dbItem.description || '',
+      type: dbItem.type,
+      impactQMS: dbItem.impact_qms,
+      likelihood: dbItem.likelihood,
+      severity: dbItem.severity,
+      riskRating: dbItem.risk_rating,
+      riskLevel: dbItem.risk_level,
+      existingControls: dbItem.existing_controls,
+      expectedBenefit: dbItem.expected_benefit,
+      feasibility: dbItem.feasibility,
+      actionPlans: (dbItem.action_plans || []) as ActionPlan[],
+      residualLikelihood: dbItem.residual_likelihood,
+      residualSeverity: dbItem.residual_severity,
+      residualRiskRating: dbItem.residual_risk_rating,
+      residualRiskLevel: dbItem.residual_risk_level,
+      effectivenessRemarks: dbItem.effectiveness_remarks,
+      reassessmentDate: dbItem.reassessment_date,
+      status: dbItem.status,
+      createdAt: dbItem.created_at || new Date().toISOString(),
+      closedAt: dbItem.closed_at,
+      auditTrail: trail
   };
 };
 
@@ -422,22 +434,13 @@ const getDaysRemaining = (item: RegistryItem): { days: number, label: string, co
 
 // --- Components ---
 
-const AppHeader = ({ title, subtitle, centered = false, small = false, onRefresh }: { title: string, subtitle: string, centered?: boolean, small?: boolean, onRefresh?: () => void }) => (
+const AppHeader = ({ title, subtitle, centered = false, small = false }: { title: string, subtitle: string, centered?: boolean, small?: boolean }) => (
   <header className={`sticky ${small ? 'h-16 px-4' : 'h-20 px-7'} top-0 z-50 flex items-center gap-3 bg-osmak-green text-white py-3 shadow-header w-full ${centered ? 'justify-center' : ''}`}>
     <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="OsMak Logo" className={`${small ? 'h-10' : 'h-14'} w-auto object-contain`} />
-    <div className="flex flex-col justify-center flex-1">
+    <div className="flex flex-col justify-center">
       <h1 className={`text-white ${small ? 'text-xs' : 'text-xl'} font-extrabold tracking-wide uppercase leading-tight`}>{title}</h1>
       <span className={`text-white ${small ? 'text-[0.65rem]' : 'text-sm'} opacity-90 tracking-wider`}>{subtitle}</span>
     </div>
-    {onRefresh && (
-      <button 
-        onClick={onRefresh} 
-        className="p-2 hover:bg-green-700 rounded-full transition-colors text-white"
-        title="Refresh Data"
-      >
-        <RefreshCw size={20} />
-      </button>
-    )}
   </header>
 );
 
@@ -673,7 +676,7 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">A. Reviewing & Verifying Items</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring your attention.</li>
+                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring attention.</li>
                            <li><strong>Action Plan Verification:</strong> Verify individual plans or return for revision.</li>
                            <li><strong>Final Verification & Closure:</strong>
                                 <ul className="list-[circle] pl-5 mt-1 space-y-1 text-xs">
@@ -911,17 +914,20 @@ const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[], onCl
     };
 
     const formatTimestamp = (ts: string) => {
-        if (!ts) return '';
-        const date = new Date(ts);
-        if (isNaN(date.getTime())) return ts;
-        return date.toLocaleString('en-US', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric', 
-            hour: 'numeric', 
-            minute: '2-digit', 
-            hour12: true 
-        });
+        try {
+            const date = new Date(ts);
+            if (isNaN(date.getTime())) return ts;
+            return date.toLocaleString('en-US', { 
+                year: 'numeric', 
+                month: 'numeric', 
+                day: 'numeric', 
+                hour: 'numeric', 
+                minute: '2-digit', 
+                hour12: true 
+            });
+        } catch {
+            return ts;
+        }
     };
 
     return (
@@ -983,7 +989,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
       {showManual && <UserManualModal onClose={() => setShowManual(false)} />}
       
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" centered small />
+        <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" />
         
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="flex bg-gray-100 p-1 rounded-lg mb-4">
@@ -1061,637 +1067,2477 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   );
 };
 
-const Dashboard = ({ items, section, isIQA }: { items: RegistryItem[], section: string, isIQA: boolean }) => {
-  const displayIds = useMemo(() => getDisplayIds(items), [items]);
+const ItemDetailModal = ({ 
+  item, 
+  isIQA, 
+  currentUser,
+  displayId,
+  onClose, 
+  onUpdate, 
+  onDelete 
+}: { 
+  item: RegistryItem, 
+  isIQA: boolean, 
+  currentUser: string,
+  displayId: string,
+  onClose: () => void, 
+  onUpdate: (updated: RegistryItem) => void,
+  onDelete: (id: string) => void
+}) => {
+  const [reassessment, setReassessment] = useState({
+    likelihood: 1,
+    severity: 1,
+    remarks: '',
+    date: new Date().toISOString().split('T')[0]
+  });
   
-  // Filter items based on role
-  const relevantItems = useMemo(() => {
-     if (isIQA && section === 'All') return items;
-     if (isIQA) return items.filter(i => i.section === section);
-     return items.filter(i => i.section === section);
-  }, [items, section, isIQA]);
+  const [iqaVerification, setIqaVerification] = useState({
+    implementation: 'IMPLEMENTED' as 'IMPLEMENTED' | 'NOT_IMPLEMENTED',
+    effectiveness: 'EFFECTIVE' as 'EFFECTIVE' | 'NOT_EFFECTIVE',
+    remarks: ''
+  });
 
-  const openItems = relevantItems.filter(i => i.status !== 'CLOSED');
-  const openRisks = openItems.filter(i => i.type === 'RISK');
-  const openOpps = openItems.filter(i => i.type === 'OPPORTUNITY');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<RegistryItem>(item);
 
-  // Logic for countdown cards (Risks only)
-  const upcomingRisks = openRisks
-    .map(item => {
-        const activePlans = item.actionPlans.filter(p => p.status !== 'COMPLETED');
-        if (activePlans.length === 0) return null;
-        const targetDates = activePlans.map(p => new Date(p.targetDate).getTime());
-        const nearest = Math.min(...targetDates);
-        return { item, date: nearest };
-    })
-    .filter((x): x is { item: RegistryItem, date: number } => x !== null)
-    .sort((a, b) => a.date - b.date)
-    .slice(0, 4);
+  const [isAddingPlan, setIsAddingPlan] = useState(false);
+  const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
+  const [completingActionId, setCompletingActionId] = useState<string | null>(null);
+  const [completionRemarks, setCompletionRemarks] = useState('');
+  const [delayReason, setDelayReason] = useState('');
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
+  const [reopenPassword, setReopenPassword] = useState('');
+  const [reopenError, setReopenError] = useState('');
+
+  const reassessmentRiskRating = reassessment.likelihood * reassessment.severity;
+  const reassessmentRiskLevel = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
+
+  useEffect(() => {
+    setEditData(item);
+  }, [item]);
+
+  const handleVerifyAction = (actionId: string, status: 'COMPLETED' | 'REVISION_REQUIRED') => {
+      const updatedActions = item.actionPlans.map(ap => 
+        ap.id === actionId ? { ...ap, status: status } : ap
+      ) as ActionPlan[];
+      
+      let nextStatus = item.status;
+      let eventLog = '';
+      
+      if (status === 'COMPLETED') {
+         eventLog = 'Action Plan Verified as Complete';
+         const allCompleted = updatedActions.every(a => a.status === 'COMPLETED');
+         if (allCompleted) {
+             nextStatus = 'IQA_VERIFICATION';
+         }
+      } else {
+         eventLog = 'Action Plan Rejected by IQA';
+      }
+      
+      let updatedItem = addAuditEvent(item, eventLog, currentUser);
+      updatedItem = {...updatedItem, actionPlans: updatedActions, status: nextStatus };
+  
+      onUpdate(updatedItem);
+  };
+
+  const handleUserMarkCompleted = (actionId: string) => {
+    const plan = item.actionPlans.find(ap => ap.id === actionId);
+    if (!plan) return;
+
+    const targetDate = new Date(plan.targetDate);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const isOverdue = targetDate < today;
+
+    if (isOverdue && !delayReason.trim()) {
+        alert("This item is overdue. Please provide a reason for the delay.");
+        return;
+    }
+
+    let finalRemarks = completionRemarks;
+    if (isOverdue) {
+        finalRemarks = `[DELAY JUSTIFICATION: ${delayReason}] ${completionRemarks}`;
+    }
+
+    let updatedItem = addAuditEvent(item, "Action Submitted for Verification", currentUser);
+    
+    let updates: Partial<RegistryItem> = {};
+
+    if (item.type === 'RISK') {
+        const rating = reassessment.likelihood * reassessment.severity;
+        const level = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
+        updates = {
+             residualLikelihood: reassessment.likelihood,
+             residualSeverity: reassessment.severity,
+             residualRiskRating: rating,
+             residualRiskLevel: level,
+        };
+    }
+
+    const updatedActions = item.actionPlans.map(ap => 
+      ap.id === actionId ? { ...ap, status: 'FOR_VERIFICATION', completionRemarks: finalRemarks } : ap
+    ) as ActionPlan[];
+
+    onUpdate({ ...updatedItem, actionPlans: updatedActions, ...updates });
+    setCompletingActionId(null);
+    setCompletionRemarks('');
+    setDelayReason('');
+  };
+
+  const handleSubmitIQAVerification = () => {
+      if (iqaVerification.implementation === 'NOT_IMPLEMENTED' || iqaVerification.effectiveness === 'NOT_EFFECTIVE') {
+          const reason = `IQA Verification Failed: Implementation=${iqaVerification.implementation}, Effectiveness=${iqaVerification.effectiveness}`;
+          let updatedItem = addAuditEvent(item, "IQA Verification Rejected", currentUser);
+          
+          const rejectionNote = `[IQA REJECTION] ${iqaVerification.remarks || 'No remarks provided.'}`;
+          const currentRemarks = item.effectivenessRemarks || '';
+          
+          onUpdate({
+              ...updatedItem,
+              status: 'IMPLEMENTATION',
+              effectivenessRemarks: currentRemarks ? `${currentRemarks}\n\n${rejectionNote}` : rejectionNote
+          });
+      } else {
+          let updatedItem = addAuditEvent(item, "Entry Validated and Closed", currentUser);
+          const closingNote = iqaVerification.remarks ? `[IQA VERIFIED] ${iqaVerification.remarks}` : (item.effectivenessRemarks || '');
+
+          onUpdate({
+              ...updatedItem,
+              status: 'CLOSED',
+              effectivenessRemarks: closingNote, 
+              closedAt: new Date().toISOString().split('T')[0]
+          });
+      }
+  }
+
+  const handleRequirePlan = () => {
+     alert("Please notify the section that an action plan is mandatory.");
+  }
+
+  const handleReopen = () => {
+      const updatedItem = addAuditEvent(item, "Entry Reopened", currentUser);
+      onUpdate({ ...updatedItem, status: 'IMPLEMENTATION', closedAt: undefined });
+  };
+
+  const confirmDelete = () => {
+      const correctPassword = CREDENTIALS[currentUser] || CREDENTIALS['DEFAULT'];
+      if (deletePassword === correctPassword) {
+          onDelete(item.id);
+      } else {
+          setDeleteError('Incorrect password. Please try again.');
+      }
+  };
+
+  const confirmReopen = () => {
+      const correctPassword = CREDENTIALS[currentUser] || CREDENTIALS['DEFAULT'];
+      if (reopenPassword === correctPassword) {
+          handleReopen();
+      } else {
+          setReopenError('Incorrect password. Please try again.');
+      }
+  };
+
+  const handleAddPlanInModal = () => {
+    if (!newPlan.description || !newPlan.strategy) return;
+    const action: ActionPlan = {
+      id: `AP-${Date.now()}`,
+      ...newPlan,
+      status: 'APPROVED'
+    };
+    const updatedItem = addAuditEvent(item, `Action Plan Added: ${newPlan.description}`, currentUser);
+    onUpdate({
+      ...updatedItem,
+      actionPlans: [...updatedItem.actionPlans, action]
+    });
+    setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
+    setIsAddingPlan(false);
+  };
+
+  const handleDeletePlan = (id: string) => {
+    const planToDelete = item.actionPlans.find(ap => ap.id === id);
+    let updatedItem = addAuditEvent(item, `Action Plan Removed: ${planToDelete?.description}`, currentUser);
+    onUpdate({
+      ...updatedItem,
+      actionPlans: updatedItem.actionPlans.filter(ap => ap.id !== id)
+    });
+  };
+
+  const updateEditRisk = (l: number, s: number) => {
+    setEditData(prev => ({
+      ...prev,
+      likelihood: l,
+      severity: s,
+      riskRating: l * s,
+      riskLevel: calculateRiskLevel(l, s)
+    }));
+  };
+
+  const handleSaveEdit = () => {
+    const updatedItem = addAuditEvent(editData, "Details Edited", currentUser);
+    onUpdate(updatedItem);
+    setIsEditing(false);
+  };
+
+  const strategies = item.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
+  const canEdit = !isIQA && item.status === 'IMPLEMENTATION';
+
+  const isPlanOverdue = (plan: ActionPlan) => {
+    if (plan.status === 'COMPLETED' || plan.status === 'FOR_VERIFICATION') return false; 
+    const target = new Date(plan.targetDate);
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    return target < now;
+  }
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-       <div className="flex items-center justify-between">
-         <h2 className="text-2xl font-bold text-gray-800">
-             {isIQA && section === 'All' ? 'Global Dashboard' : `${section} Dashboard`}
-         </h2>
-         <div className="text-sm text-gray-500 flex items-center gap-2">
-             <Calendar size={16}/> {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-         </div>
-       </div>
-
-       {/* Countdown Cards */}
-       {upcomingRisks.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {upcomingRisks.map(({ item, date }) => {
-                  const now = new Date().getTime();
-                  const diff = date - now;
-                  const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-                  let bg = 'bg-white';
-                  let text = 'text-gray-800';
-                  let status = 'Due Soon';
-                  
-                  if (days < 0) { bg = 'bg-red-50 border-red-200'; text = 'text-red-700'; status = 'Overdue'; }
-                  else if (days < 7) { bg = 'bg-orange-50 border-orange-200'; text = 'text-orange-700'; status = 'Urgent'; }
-                  else { bg = 'bg-green-50 border-green-200'; text = 'text-green-700'; status = 'On Track'; }
-
-                  return (
-                      <div key={item.id} className={`${bg} border p-4 rounded-xl shadow-sm flex flex-col gap-2`}>
-                          <div className="flex justify-between items-start">
-                             <span className="font-bold text-xs bg-gray-200 px-2 py-1 rounded text-gray-600">{displayIds[item.id]}</span>
-                             <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-white/50 border ${text}`}>{status}</span>
-                          </div>
-                          <div className="flex-1">
-                              <h4 className="font-medium text-sm line-clamp-2 leading-tight">{item.description}</h4>
-                          </div>
-                          <div className="mt-2 text-xs font-semibold flex items-center gap-1">
-                              <Clock size={12} />
-                              {days < 0 ? `${Math.abs(days)} days overdue` : `${days} days remaining`}
-                          </div>
-                      </div>
-                  )
-              })}
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
+        <div className="p-6 border-b bg-gray-50 flex justify-between items-start">
+          <div className="flex-1 mr-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="font-mono text-xs text-gray-500 bg-white border px-2 py-0.5 rounded">{displayId}</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(item.status)}`}>
+                {formatStatus(item.status)}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${item.type === 'RISK' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                {item.type}
+              </span>
+            </div>
+            {isEditing ? (
+              <input 
+                type="text" 
+                className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-transparent"
+                value={editData.description}
+                onChange={e => setEditData({...editData, description: e.target.value})}
+              />
+            ) : (
+              <h2 className="text-xl font-bold text-gray-900">{item.description}</h2>
+            )}
           </div>
-       )}
-
-       {/* Stacks */}
-       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-              <div className="p-4 border-b bg-red-50 flex justify-between items-center">
-                  <h3 className="font-bold text-red-900 flex items-center gap-2"><AlertTriangle size={18}/> Open Risks ({openRisks.length})</h3>
-              </div>
-              <div className="overflow-y-auto max-h-[400px]">
-                 {openRisks.length === 0 ? (
-                     <div className="p-8 text-center text-gray-400">No open risks found.</div>
-                 ) : (
-                     <table className="w-full text-left text-sm">
-                         <thead className="bg-gray-50 text-gray-500 sticky top-0">
-                             <tr>
-                                 <th className="p-3 font-medium">ID</th>
-                                 <th className="p-3 font-medium">Description</th>
-                                 <th className="p-3 font-medium">Level</th>
-                                 <th className="p-3 font-medium">Status</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y">
-                             {openRisks.map(item => (
-                                 <tr key={item.id} className="hover:bg-gray-50">
-                                     <td className="p-3 font-mono text-xs">{displayIds[item.id]}</td>
-                                     <td className="p-3 max-w-[200px] truncate">{item.description}</td>
-                                     <td className="p-3"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getRiskColor(item.riskLevel)}`}>{item.riskLevel}</span></td>
-                                     <td className="p-3"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getPillColor(item.status)}`}>{formatStatus(item.status)}</span></td>
-                                 </tr>
-                             ))}
-                         </tbody>
-                     </table>
-                 )}
-              </div>
+          <div className="flex gap-2">
+            {canEdit && !isEditing && (
+              <button 
+                onClick={() => setIsEditing(true)} 
+                className="text-gray-500 hover:text-osmak-700 p-1 rounded hover:bg-gray-100 transition"
+                title="Edit Details"
+              >
+                <Pencil size={24}/>
+              </button>
+            )}
+            {isEditing && (
+              <button 
+                onClick={handleSaveEdit} 
+                className="text-green-600 hover:text-green-800 p-1 rounded hover:bg-green-50 transition"
+                title="Save Changes"
+              >
+                <Save size={24}/>
+              </button>
+            )}
+            <button onClick={() => { setIsEditing(false); onClose(); }} className="text-gray-400 hover:text-gray-600"><XCircle size={28}/></button>
           </div>
+        </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-              <div className="p-4 border-b bg-blue-50 flex justify-between items-center">
-                  <h3 className="font-bold text-blue-900 flex items-center gap-2"><Lightbulb size={18}/> Open Opportunities ({openOpps.length})</h3>
-              </div>
-              <div className="overflow-y-auto max-h-[400px]">
-                 {openOpps.length === 0 ? (
-                     <div className="p-8 text-center text-gray-400">No open opportunities found.</div>
-                 ) : (
-                     <table className="w-full text-left text-sm">
-                         <thead className="bg-gray-50 text-gray-500 sticky top-0">
-                             <tr>
-                                 <th className="p-3 font-medium">ID</th>
-                                 <th className="p-3 font-medium">Description</th>
-                                 <th className="p-3 font-medium">Benefit</th>
-                                 <th className="p-3 font-medium">Status</th>
-                             </tr>
-                         </thead>
-                         <tbody className="divide-y">
-                             {openOpps.map(item => (
-                                 <tr key={item.id} className="hover:bg-gray-50">
-                                     <td className="p-3 font-mono text-xs">{displayIds[item.id]}</td>
-                                     <td className="p-3 max-w-[200px] truncate">{item.description}</td>
-                                     <td className="p-3 max-w-[150px] truncate text-gray-500">{item.expectedBenefit}</td>
-                                     <td className="p-3"><span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getPillColor(item.status)}`}>{formatStatus(item.status)}</span></td>
-                                 </tr>
-                             ))}
-                         </tbody>
-                     </table>
-                 )}
-              </div>
-          </div>
-       </div>
-    </div>
-  )
-};
-
-const RegistryList = ({ items, section, isIQA, onView, onEdit, onDelete, onHistory, onReopen }: any) => {
-   const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
-   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, OPEN, CLOSED
-   const [filterType, setFilterType] = useState('ALL');
-   const displayIds = useMemo(() => getDisplayIds(items), [items]);
-
-   const filteredItems = items.filter((i: RegistryItem) => {
-       if (!isIQA && i.section !== section) return false;
-       if (isIQA && section !== 'All' && i.section !== section) return false;
-       
-       const year = new Date(i.createdAt).getFullYear().toString();
-       if (filterYear !== 'All' && year !== filterYear) return false;
-
-       if (filterStatus === 'OPEN' && i.status === 'CLOSED') return false;
-       if (filterStatus === 'CLOSED' && i.status !== 'CLOSED') return false;
-
-       if (filterType !== 'ALL' && i.type !== filterType) return false;
-
-       return true;
-   }).sort((a: RegistryItem, b: RegistryItem) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-   return (
-      <div className="space-y-4 animate-fadeIn">
-         <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-             <div className="flex items-center gap-2">
-                 <Filter size={16} className="text-gray-400"/>
-                 <span className="text-sm font-medium text-gray-700">Filters:</span>
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-white relative">
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 text-sm p-4 bg-gray-50 rounded-xl border border-gray-100">
+             <div>
+                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Section</span>
+                <span className="font-semibold text-gray-800">{item.section}</span>
              </div>
-             <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="text-sm border rounded px-2 py-1 bg-gray-50">
-                 <option value="All">All Years</option>
-                 <option value="2024">2024</option>
-                 <option value="2025">2025</option>
-             </select>
-             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-sm border rounded px-2 py-1 bg-gray-50">
-                 <option value="ALL">All Status</option>
-                 <option value="OPEN">Active</option>
-                 <option value="CLOSED">Closed</option>
-             </select>
-             <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-sm border rounded px-2 py-1 bg-gray-50">
-                 <option value="ALL">All Types</option>
-                 <option value="RISK">Risks</option>
-                 <option value="OPPORTUNITY">Opportunities</option>
-             </select>
-         </div>
+             <div>
+                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Process / Function</span>
+                {isEditing ? (
+                   <input type="text" className="w-full border rounded p-1 bg-white" value={editData.process} onChange={e => setEditData({...editData, process: e.target.value})} />
+                ) : (
+                   <span className="font-semibold text-gray-800">{item.process}</span>
+                )}
+             </div>
+             <div>
+                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Source</span>
+                {isEditing ? (
+                   <div className="relative">
+                      <select 
+                          className="w-full border rounded p-1 bg-white appearance-none"
+                          value={SOURCES.includes(editData.source) ? editData.source : 'Others'}
+                          onChange={e => {
+                              if (e.target.value === 'Others') setEditData({...editData, source: ''});
+                              else setEditData({...editData, source: e.target.value});
+                          }}
+                      >
+                          {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      {(!SOURCES.includes(editData.source) || editData.source === '') && (
+                          <input 
+                              type="text" 
+                              className="w-full border rounded p-1 mt-1 bg-white" 
+                              placeholder="Specify source..."
+                              value={editData.source}
+                              onChange={e => setEditData({...editData, source: e.target.value})}
+                          />
+                      )}
+                   </div>
+                ) : (
+                   <span className="font-semibold text-gray-800">{item.source}</span>
+                )}
+             </div>
+             <div>
+                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Date Identified</span>
+                {isEditing ? (
+                   <input type="date" className="w-full border rounded p-1 bg-white" value={editData.dateIdentified} onChange={e => setEditData({...editData, dateIdentified: e.target.value})} />
+                ) : (
+                   <span className="font-semibold text-gray-800 flex items-center gap-2">
+                      <Calendar size={14} className="text-gray-400"/> {item.dateIdentified || 'N/A'}
+                   </span>
+                )}
+             </div>
+          </div>
 
-         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-             <table className="w-full text-left text-sm">
-                 <thead className="bg-gray-100 text-gray-600 border-b">
-                     <tr>
-                         <th className="p-4 font-semibold w-16">ID</th>
-                         <th className="p-4 font-semibold w-24">Date</th>
-                         <th className="p-4 font-semibold">Description</th>
-                         <th className="p-4 font-semibold">Process / Source</th>
-                         <th className="p-4 font-semibold w-32">Level</th>
-                         <th className="p-4 font-semibold w-32">Status</th>
-                         <th className="p-4 font-semibold w-32 text-right">Actions</th>
-                     </tr>
-                 </thead>
-                 <tbody className="divide-y divide-gray-100">
-                     {filteredItems.map((item: RegistryItem) => (
-                         <tr key={item.id} className="hover:bg-gray-50 group transition">
-                             <td className="p-4 font-mono font-medium text-gray-500">{displayIds[item.id]}</td>
-                             <td className="p-4 text-gray-500 text-xs">{new Date(item.createdAt).toLocaleDateString()}</td>
-                             <td className="p-4">
-                                 <p className="line-clamp-2 font-medium text-gray-800">{item.description}</p>
-                             </td>
-                             <td className="p-4 text-xs text-gray-500">
-                                 <div className="font-medium">{item.process}</div>
-                                 <div className="opacity-75">{item.source}</div>
-                             </td>
-                             <td className="p-4">
-                                 {item.type === 'RISK' ? (
-                                    <span className={`text-[10px] px-2 py-1 rounded-full font-bold border ${getRiskColor(item.riskLevel)}`}>{item.riskLevel}</span>
-                                 ) : (
-                                    <span className="text-[10px] px-2 py-1 rounded-full font-bold bg-blue-100 text-blue-700">OPPORTUNITY</span>
-                                 )}
-                             </td>
-                             <td className="p-4">
-                                 <span className={`text-[10px] px-2 py-1 rounded-full font-bold ${getPillColor(item.status)}`}>{formatStatus(item.status)}</span>
-                             </td>
-                             <td className="p-4 text-right">
-                                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                     <button onClick={() => onHistory(item)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600" title="History"><Clock size={16}/></button>
-                                     <button onClick={() => onEdit(item)} className="p-2 hover:bg-blue-50 rounded-full text-blue-400 hover:text-blue-600" title="View/Edit"><Pencil size={16}/></button>
-                                     {isIQA && item.status === 'CLOSED' && (
-                                         <button onClick={() => onReopen(item)} className="p-2 hover:bg-orange-50 rounded-full text-orange-400 hover:text-orange-600" title="Reopen"><RotateCcw size={16}/></button>
-                                     )}
-                                     {isIQA && (
-                                         <button onClick={() => onDelete(item)} className="p-2 hover:bg-red-50 rounded-full text-red-400 hover:text-red-600" title="Delete"><Trash2 size={16}/></button>
-                                     )}
-                                 </div>
-                             </td>
-                         </tr>
-                     ))}
-                 </tbody>
-             </table>
-             {filteredItems.length === 0 && (
-                 <div className="p-10 text-center text-gray-400">No records found matching filters.</div>
-             )}
-         </div>
-      </div>
-   )
-};
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <div className="space-y-4">
+               <h3 className="font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
+                 <FileText size={18} /> {item.type === 'RISK' ? 'Risk Assessment' : 'Opportunity Assessment'}
+               </h3>
+               
+               {item.type === 'RISK' ? (
+                 <>
+                   <div>
+                     <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Potential Impact on QMS</span>
+                     {isEditing ? (
+                        <textarea className="w-full border rounded p-2 bg-white" value={editData.impactQMS} onChange={e => setEditData({...editData, impactQMS: e.target.value})} />
+                     ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.impactQMS}</p>
+                     )}
+                   </div>
+                   <div>
+                     <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Existing Controls / Mitigation</span>
+                     {isEditing ? (
+                        <textarea className="w-full border rounded p-2 bg-white" value={editData.existingControls} onChange={e => setEditData({...editData, existingControls: e.target.value})} />
+                     ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.existingControls || 'N/A'}</p>
+                     )}
+                   </div>
+                 </>
+               ) : (
+                 <>
+                   <div>
+                     <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Expected Benefit</span>
+                     {isEditing ? (
+                        <textarea className="w-full border rounded p-2 bg-white" value={editData.expectedBenefit} onChange={e => setEditData({...editData, expectedBenefit: e.target.value})} />
+                     ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.expectedBenefit}</p>
+                     )}
+                   </div>
+                   <div>
+                     <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Feasibility</span>
+                     {isEditing ? (
+                        <select className="w-full border rounded p-2 bg-white" value={editData.feasibility} onChange={e => setEditData({...editData, feasibility: e.target.value as any})}>
+                            <option value="LOW">Low</option>
+                            <option value="MEDIUM">Medium</option>
+                            <option value="HIGH">High</option>
+                        </select>
+                     ) : (
+                        <span className="text-green-700 font-bold">{item.feasibility}</span>
+                     )}
+                   </div>
+                 </>
+               )}
+             </div>
 
-const EntryWizard = ({ onClose, onSubmit, section }: { onClose: () => void, onSubmit: (item: any) => void, section: string }) => {
-    const [step, setStep] = useState(1);
-    const [type, setType] = useState<EntryType>('RISK');
-    const [formData, setFormData] = useState<Partial<RegistryItem>>({
-        section,
-        process: '',
-        source: SOURCES[0],
-        description: '',
-        type: 'RISK',
-        likelihood: 1,
-        severity: 1,
-        riskRating: 1,
-        riskLevel: 'LOW',
-        actionPlans: []
-    });
+             <div className="space-y-4">
+                <h3 className="font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
+                  <Activity size={18} /> Scoring & Level
+                </h3>
+                {item.type === 'RISK' ? (
+                  <div className="space-y-6">
+                    <div>
+                        {(item.residualLikelihood || 0) > 0 && <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Initial Assessment</h4>}
+                        <div className="flex gap-4">
+                             <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+                                <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
+                                {isEditing ? (
+                                   <>
+                                     <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.likelihood} onChange={e => updateEditRisk(parseInt(e.target.value), editData.severity || 1)} />
+                                     <div className="text-xl font-bold text-osmak-800 mt-1">{editData.likelihood}</div>
+                                   </>
+                                ) : (
+                                   <div className="text-2xl font-bold text-gray-900">{item.likelihood}</div>
+                                )}
+                                <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[(isEditing ? editData.likelihood : item.likelihood) || 1]}</div>
+                             </div>
+                             
+                             <div className={`flex-1 ${isEditing ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'} p-4 rounded-lg text-center`}>
+                                <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
+                                {isEditing ? (
+                                   <>
+                                     <input type="range" min="1" max="5" className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.severity} onChange={e => updateEditRisk(editData.likelihood || 1, parseInt(e.target.value))} />
+                                     <div className="text-xl font-bold text-osmak-800 mt-1">{editData.severity}</div>
+                                   </>
+                                ) : (
+                                   <div className="text-2xl font-bold text-gray-900">{item.severity}</div>
+                                )}
+                                <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[(isEditing ? editData.severity : item.severity) || 1]}</div>
+                             </div>
 
-    const handleNext = () => setStep(s => s + 1);
-    const handleBack = () => setStep(s => s - 1);
-    
-    const updateRisk = (l: number, s: number) => {
-        const rating = l * s;
-        let level: RiskLevel = 'LOW';
-        if (rating >= 16) level = 'CRITICAL';
-        else if (rating >= 11) level = 'HIGH';
-        else if (rating >= 6) level = 'MODERATE';
-        
-        setFormData(prev => ({ ...prev, likelihood: l, severity: s, riskRating: rating, riskLevel: level }));
-    };
-
-    const addActionPlan = () => {
-        const newPlan: ActionPlan = {
-            id: crypto.randomUUID(),
-            strategy: 'Mitigate',
-            description: '',
-            evidence: '',
-            responsiblePerson: '',
-            targetDate: '',
-            status: 'PENDING_APPROVAL'
-        };
-        setFormData(prev => ({ ...prev, actionPlans: [...(prev.actionPlans || []), newPlan] }));
-    };
-
-    const updateActionPlan = (index: number, field: string, value: string) => {
-        const plans = [...(formData.actionPlans || [])];
-        plans[index] = { ...plans[index], [field]: value };
-        setFormData(prev => ({ ...prev, actionPlans: plans }));
-    };
-
-    const removeActionPlan = (index: number) => {
-        const plans = [...(formData.actionPlans || [])];
-        plans.splice(index, 1);
-        setFormData(prev => ({ ...prev, actionPlans: plans }));
-    };
-
-    const handleSubmit = () => {
-        if (!formData.description || !formData.process) return alert('Please fill in all required fields.');
-        if ((formData.actionPlans || []).length === 0) return alert('At least one Action Plan is mandatory.');
-        onSubmit(formData);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] animate-fadeIn">
-                <div className="p-6 border-b bg-gray-50 flex justify-between items-center rounded-t-xl">
-                    <h2 className="text-xl font-bold text-gray-800">New {type === 'RISK' ? 'Risk' : 'Opportunity'} Entry</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24}/></button>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-8">
-                    {/* Progress Bar */}
-                    <div className="flex items-center mb-8 px-4">
-                        {[1, 2, 3].map(i => (
-                            <div key={i} className="flex-1 flex flex-col items-center relative">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${step >= i ? 'bg-osmak-green text-white' : 'bg-gray-200 text-gray-500'}`}>
-                                    {i}
+                             <div className="flex-1 p-4 rounded-lg text-center border-2 border-gray-100 flex flex-col justify-center items-center">
+                                <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Risk Rating</span>
+                                <div className={`text-3xl font-bold ${
+                                   (isEditing ? editData.riskLevel : item.riskLevel) === 'CRITICAL' ? 'text-red-600' : 
+                                   (isEditing ? editData.riskLevel : item.riskLevel) === 'HIGH' ? 'text-orange-500' : 'text-gray-800'
+                                }`}>
+                                  {isEditing ? editData.riskRating : item.riskRating}
                                 </div>
-                                <div className="text-[10px] mt-1 text-gray-500 uppercase font-medium">
-                                    {i===1 ? 'General' : i===2 ? 'Assessment' : 'Actions'}
-                                </div>
-                                {i < 3 && <div className={`absolute top-4 left-[50%] w-full h-0.5 ${step > i ? 'bg-osmak-green' : 'bg-gray-200'} -z-10`}></div>}
-                            </div>
-                        ))}
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(isEditing ? editData.riskLevel : item.riskLevel)}`}>
+                                    {isEditing ? editData.riskLevel : item.riskLevel}
+                                </span>
+                             </div>
+                        </div>
                     </div>
 
-                    {step === 1 && (
-                        <div className="space-y-4">
-                             <div className="flex gap-4 p-1 bg-gray-100 rounded-lg">
-                                <button type="button" onClick={() => { setType('RISK'); setFormData(p=>({...p, type:'RISK'})); }} className={`flex-1 py-2 rounded font-bold text-sm transition ${type === 'RISK' ? 'bg-white shadow text-red-600' : 'text-gray-500'}`}>RISK</button>
-                                <button type="button" onClick={() => { setType('OPPORTUNITY'); setFormData(p=>({...p, type:'OPPORTUNITY'})); }} className={`flex-1 py-2 rounded font-bold text-sm transition ${type === 'OPPORTUNITY' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>OPPORTUNITY</button>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Process / Activity</label>
-                                <input type="text" className="w-full border p-2 rounded focus:ring-2 focus:ring-osmak-green outline-none" 
-                                    value={formData.process} onChange={e => setFormData({...formData, process: e.target.value})} placeholder="e.g. Patient Admission" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-                                <select className="w-full border p-2 rounded focus:ring-2 focus:ring-osmak-green outline-none"
-                                    value={formData.source} onChange={e => setFormData({...formData, source: e.target.value})}>
-                                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                                <textarea className="w-full border p-2 rounded focus:ring-2 focus:ring-osmak-green outline-none h-24" 
-                                    value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
-                            </div>
+                    {(item.residualLikelihood || 0) > 0 && (
+                        <div>
+                             <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 border-t pt-4">Residual Assessment</h4>
+                             <div className="flex gap-4">
+                                 <div className="flex-1 bg-amber-50 p-4 rounded-lg text-center border border-amber-100">
+                                    <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
+                                    <div className="text-2xl font-bold text-gray-900">{item.residualLikelihood}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[item.residualLikelihood || 1]}</div>
+                                 </div>
+                                 
+                                 <div className="flex-1 bg-amber-50 p-4 rounded-lg text-center border border-amber-100">
+                                    <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
+                                    <div className="text-2xl font-bold text-gray-900">{item.residualSeverity}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[item.residualSeverity || 1]}</div>
+                                 </div>
+
+                                 <div className="flex-1 p-4 rounded-lg text-center border-2 border-amber-100 flex flex-col justify-center items-center bg-white">
+                                    <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Residual Rating</span>
+                                    <div className="text-3xl font-bold text-gray-800">
+                                      {item.residualRiskRating}
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(item.residualRiskLevel)}`}>
+                                        {item.residualRiskLevel}
+                                    </span>
+                                 </div>
+                              </div>
                         </div>
                     )}
+                  </div>
+                ) : (
+                  <div className="bg-green-50 p-4 rounded-lg text-green-800 text-sm">
+                    Opportunities are prioritized based on Feasibility ({isEditing ? editData.feasibility : item.feasibility}) and Impact.
+                  </div>
+                )}
+             </div>
+          </div>
 
-                    {step === 2 && (
-                        <div className="space-y-6">
-                            {type === 'RISK' ? (
-                                <div className="bg-red-50 p-6 rounded-xl border border-red-100 space-y-6">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="font-bold text-red-800">Risk Assessment</h3>
-                                        <div className={`px-4 py-2 rounded-lg font-bold border ${getRiskColor(formData.riskLevel)}`}>
-                                            Rating: {formData.riskRating} ({formData.riskLevel})
-                                        </div>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex justify-between">
-                                            <span>Likelihood (1-5)</span>
-                                            <span className="font-normal text-gray-500">{LIKELIHOOD_DESC[formData.likelihood || 1]}</span>
-                                        </label>
-                                        <input type="range" min="1" max="5" value={formData.likelihood} 
-                                            onChange={e => updateRisk(parseInt(e.target.value), formData.severity || 1)}
-                                            className="w-full accent-red-600 cursor-pointer" />
-                                        <div className="flex justify-between text-xs text-gray-400 mt-1"><span>1</span><span>5</span></div>
-                                    </div>
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <ClipboardCheck size={20} /> Action Plans
+              </h3>
+              {(!isIQA && item.status === 'IMPLEMENTATION' && !isAddingPlan) && (
+                <button onClick={() => setIsAddingPlan(true)} className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-100 border border-blue-200">
+                  + Add / Revise Plan
+                </button>
+              )}
+            </div>
 
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-2 flex justify-between">
-                                            <span>Severity (1-5)</span>
-                                            <span className="font-normal text-gray-500">{SEVERITY_DESC[formData.severity || 1]}</span>
-                                        </label>
-                                        <input type="range" min="1" max="5" value={formData.severity} 
-                                            onChange={e => updateRisk(formData.likelihood || 1, parseInt(e.target.value))}
-                                            className="w-full accent-red-600 cursor-pointer" />
-                                        <div className="flex justify-between text-xs text-gray-400 mt-1"><span>1</span><span>5</span></div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 space-y-4">
-                                     <h3 className="font-bold text-blue-800">Opportunity Assessment</h3>
-                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Expected Benefit</label>
-                                        <textarea className="w-full border p-2 rounded outline-none h-20" 
-                                            value={formData.expectedBenefit} onChange={e => setFormData({...formData, expectedBenefit: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Feasibility</label>
-                                        <select className="w-full border p-2 rounded outline-none"
-                                            value={formData.feasibility || 'MEDIUM'} onChange={e => setFormData({...formData, feasibility: e.target.value as any})}>
-                                            <option value="LOW">Low</option>
-                                            <option value="MEDIUM">Medium</option>
-                                            <option value="HIGH">High</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {step === 3 && (
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center mb-2">
-                                <h3 className="font-bold text-gray-800">Action Plans</h3>
-                                <button onClick={addActionPlan} className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full flex items-center gap-1 font-medium transition">
-                                    <PlusCircle size={14}/> Add Plan
+            <div className="border rounded-lg overflow-hidden shadow-sm">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 text-gray-500 font-medium border-b">
+                  <tr>
+                    <th className="px-4 py-3">Strategy</th>
+                    <th className="px-4 py-3">Action Description</th>
+                    <th className="px-4 py-3">Verification/Evidence</th>
+                    <th className="px-4 py-3">Responsible</th>
+                    <th className="px-4 py-3">Target Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Controls</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {item.actionPlans.length === 0 ? (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500 italic">No action plans recorded.</td></tr>
+                  ) : item.actionPlans.map(ap => {
+                    const overdue = isPlanOverdue(ap);
+                    return (
+                    <React.Fragment key={ap.id}>
+                      <tr className="hover:bg-gray-50 transition">
+                        <td className="px-4 py-3 text-xs font-bold uppercase text-gray-600 align-top pt-4">{ap.strategy}</td>
+                        <td className="px-4 py-3 font-medium align-top pt-4">
+                          {ap.description}
+                          {ap.completionRemarks && (
+                            <div className="mt-2 text-xs bg-gray-100 p-2 rounded text-gray-700">
+                              <span className="font-bold">Completion Remarks:</span> {ap.completionRemarks}
+                            </div>
+                          )}
+                          {ap.verificationRemarks && (
+                            <div className="mt-2 text-xs bg-indigo-50 p-2 rounded text-indigo-800 border border-indigo-100">
+                              <span className="font-bold">IQA Notes:</span> {ap.verificationRemarks}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 align-top pt-4 italic">{ap.evidence}</td>
+                        <td className="px-4 py-3 text-gray-600 align-top pt-4">{ap.responsiblePerson}</td>
+                        <td className={`px-4 py-3 align-top pt-4 ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                            {ap.targetDate}
+                            {overdue && <span className="block text-[10px] text-red-500">(Overdue)</span>}
+                        </td>
+                        <td className="px-4 py-3 align-top pt-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            ap.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                            ap.status === 'APPROVED' ? 'bg-blue-100 text-blue-800' :
+                            ap.status === 'REVISION_REQUIRED' ? 'bg-red-100 text-red-800' :
+                            ap.status === 'FOR_VERIFICATION' ? 'bg-purple-100 text-purple-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>{ap.status === 'FOR_VERIFICATION' ? 'FOR VERIFICATION' : ap.status.replace('_', ' ')}</span>
+                          {overdue && <span className="ml-2 px-1.5 py-0.5 bg-red-600 text-white text-[10px] rounded font-bold">OVERDUE</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right align-top pt-4">
+                          {isIQA ? (
+                            <div className="flex flex-row gap-2 justify-end">
+                              {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_VERIFICATION' && (
+                                <>
+                                  <button 
+                                      onClick={() => handleVerifyAction(ap.id, 'COMPLETED')} 
+                                      className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 shadow-sm"
+                                      title="Verify Complete"
+                                  >
+                                    <CheckCircle2 size={16} />
+                                  </button>
+                                  <button 
+                                      onClick={() => handleVerifyAction(ap.id, 'REVISION_REQUIRED')} 
+                                      className="bg-red-500 text-white p-1.5 rounded hover:bg-red-600 shadow-sm"
+                                      title="Return for Revision"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                </>
+                              )}
+                              {item.status === 'IMPLEMENTATION' && ap.status === 'APPROVED' && (
+                                <span className="text-xs text-gray-400 italic">Waiting for user...</span>
+                              )}
+                            </div>
+                          ) : (
+                            <>
+                              {item.status === 'IMPLEMENTATION' && (
+                                <button onClick={() => handleDeletePlan(ap.id)} className="text-red-500 hover:text-red-700 p-1">
+                                  <Trash2 size={16} />
                                 </button>
-                            </div>
-                            {(formData.actionPlans || []).length === 0 && (
-                                <div className="p-6 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-400">
-                                    No action plans added. Please add at least one.
-                                </div>
-                            )}
-                            {(formData.actionPlans || []).map((plan, i) => (
-                                <div key={i} className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative group">
-                                    <button onClick={() => removeActionPlan(i)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
-                                        <XCircle size={18}/>
-                                    </button>
-                                    <div className="grid grid-cols-2 gap-4 mb-3">
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500">Strategy</label>
-                                            <select className="w-full text-sm border p-1 rounded" 
-                                                value={plan.strategy} onChange={e => updateActionPlan(i, 'strategy', e.target.value)}>
-                                                {Object.keys(type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES).map(k => <option key={k} value={k}>{k}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs font-bold text-gray-500">Target Date</label>
-                                            <input type="date" className="w-full text-sm border p-1 rounded"
-                                                value={plan.targetDate} onChange={e => updateActionPlan(i, 'targetDate', e.target.value)} />
+                              )}
+                              {item.status === 'IMPLEMENTATION' && (ap.status === 'APPROVED' || ap.status === 'REVISION_REQUIRED') && !completingActionId && (
+                                <button 
+                                    onClick={() => {
+                                        setCompletingActionId(ap.id);
+                                        setDelayReason('');
+                                        if (item.type === 'RISK') {
+                                            setReassessment(prev => ({
+                                                ...prev,
+                                                likelihood: item.residualLikelihood || item.likelihood || 1,
+                                                severity: item.residualSeverity || item.severity || 1
+                                            }));
+                                        }
+                                    }} 
+                                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm"
+                                >
+                                  Completed
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                      
+                      {completingActionId === ap.id && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-4 bg-green-50">
+                            <div className="flex flex-col gap-4">
+                                {isPlanOverdue(ap) && (
+                                    <div className="bg-red-50 p-4 rounded-lg border border-red-200 mb-2">
+                                        <div className="flex items-start gap-3">
+                                            <AlertTriangle className="text-red-500 mt-1" size={20} />
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-red-800 text-sm mb-2">Action Plan Overdue</h4>
+                                                <p className="text-xs text-red-700 mb-3">
+                                                    The target date ({ap.targetDate}) has passed. A justification is required to proceed.
+                                                </p>
+                                                <label className="block text-xs font-bold text-red-800 mb-1">Reason for Delay (Required)</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-red-300 focus:ring-2 focus:ring-red-500 outline-none"
+                                                    placeholder="Why was the target date missed?"
+                                                    value={delayReason}
+                                                    onChange={e => setDelayReason(e.target.value)}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500">Action Description</label>
-                                        <input type="text" className="w-full text-sm border p-1 rounded" placeholder="What will be done?"
-                                            value={plan.description} onChange={e => updateActionPlan(i, 'description', e.target.value)} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                                )}
 
-                <div className="p-4 border-t bg-white rounded-b-xl flex justify-between">
-                    {step > 1 ? (
-                        <button onClick={handleBack} className="px-6 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg">Back</button>
-                    ) : <div></div>}
-                    
-                    {step < 3 ? (
-                        <button onClick={handleNext} className="bg-osmak-green text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition">Next</button>
-                    ) : (
-                        <button onClick={handleSubmit} className="bg-osmak-green text-white px-8 py-2 rounded-lg font-bold hover:bg-green-700 transition shadow-lg shadow-green-200">Submit Entry</button>
-                    )}
+                                {item.type === 'RISK' && (
+                                    <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
+                                        <h4 className="font-bold text-green-800 text-sm mb-3 border-b pb-2 flex items-center gap-2">
+                                            <Activity size={16}/> Residual Risk Assessment
+                                        </h4>
+                                        <div className="flex items-center gap-6">
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Likelihood (1-5)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="range" min="1" max="5" 
+                                                        value={reassessment.likelihood}
+                                                        onChange={e => setReassessment({...reassessment, likelihood: parseInt(e.target.value)})}
+                                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                                                    />
+                                                    <span className="font-bold text-gray-800 w-6 text-center">{reassessment.likelihood}</span>
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 mt-1">{LIKELIHOOD_DESC[reassessment.likelihood]}</div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Severity (1-5)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input 
+                                                        type="range" min="1" max="5" 
+                                                        value={reassessment.severity}
+                                                        onChange={e => setReassessment({...reassessment, severity: parseInt(e.target.value)})}
+                                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                                                    />
+                                                    <span className="font-bold text-gray-800 w-6 text-center">{reassessment.severity}</span>
+                                                </div>
+                                                <div className="text-[10px] text-gray-400 mt-1">{SEVERITY_DESC[reassessment.severity]}</div>
+                                            </div>
+                                            <div className="text-center px-6 border-l flex flex-col items-center">
+                                                <div className="text-xs font-bold text-gray-400 uppercase mb-1">Residual Rating</div>
+                                                <div className="text-2xl font-bold text-gray-800">{reassessment.likelihood * reassessment.severity}</div>
+                                                <div className={`text-xs font-bold px-2 py-0.5 rounded mt-1 ${getLevelPillColor(calculateRiskLevel(reassessment.likelihood, reassessment.severity))}`}>
+                                                    {calculateRiskLevel(reassessment.likelihood, reassessment.severity)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="flex gap-4 items-end">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-bold text-green-800 mb-1">Completion Remarks (Optional)</label>
+                                    <input 
+                                    type="text" 
+                                    className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
+                                    placeholder="e.g. Installed software on May 20, 2024. Evidence attached."
+                                    value={completionRemarks}
+                                    onChange={e => setCompletionRemarks(e.target.value)}
+                                    />
+                                </div>
+                                <button 
+                                    onClick={() => handleUserMarkCompleted(ap.id)}
+                                    disabled={isPlanOverdue(ap) && !delayReason.trim()}
+                                    className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Submit for Verification
+                                </button>
+                                <button 
+                                    onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); setDelayReason(''); }}
+                                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300"
+                                >
+                                    Cancel
+                                </button>
+                                </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+
+            {isIQA && item.status === 'IMPLEMENTATION' && item.type === 'RISK' && item.actionPlans.length === 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4 flex items-center justify-between">
+                    <div>
+                        <h4 className="font-bold text-red-900">Missing Action Plan</h4>
+                        <p className="text-sm text-red-800">Action plans are mandatory for all risks. Please require the section to add one.</p>
+                    </div>
+                    <div className="flex gap-2">
+                         <button onClick={handleRequirePlan} className="px-4 py-2 bg-white border border-red-300 text-red-800 rounded font-bold hover:bg-red-100 text-sm">Require Action Plan</button>
+                    </div>
                 </div>
+            )}
+
+            {isAddingPlan && (
+              <div className="mt-4 bg-blue-50 p-4 rounded-xl border border-blue-100 animate-fadeIn">
+                 <h4 className="text-sm font-bold text-blue-800 mb-3">New Action Plan Details</h4>
+                 <div className="space-y-3">
+                   <div>
+                     <select 
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       value={newPlan.strategy}
+                       onChange={e => setNewPlan({...newPlan, strategy: e.target.value})}
+                     >
+                       <option value="">Select Strategy</option>
+                       {Object.keys(strategies).map(s => <option key={s} value={s}>{s}</option>)}
+                     </select>
+                   </div>
+                   <textarea 
+                     placeholder="Action Steps..."
+                     className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                     value={newPlan.description}
+                     onChange={e => setNewPlan({...newPlan, description: e.target.value})}
+                   />
+                   <input 
+                     type="text" 
+                     placeholder="Verification / Evidence (e.g. Photo log, Certificate)"
+                     className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                     value={newPlan.evidence}
+                     onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
+                   />
+                   <div className="grid grid-cols-2 gap-3">
+                     <input 
+                       type="text" 
+                       placeholder="Responsible Person"
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       value={newPlan.responsiblePerson}
+                       onChange={e => setNewPlan({...newPlan, responsiblePerson: e.target.value})}
+                     />
+                     <input 
+                       type="date" 
+                       className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
+                       value={newPlan.targetDate}
+                       onChange={e => setNewPlan({...newPlan, targetDate: e.target.value})}
+                     />
+                   </div>
+                   <div className="flex gap-2">
+                    <button 
+                      onClick={handleAddPlanInModal}
+                      className="flex-1 bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700"
+                    >
+                      Add Plan
+                    </button>
+                    <button 
+                      onClick={() => setIsAddingPlan(false)}
+                      className="px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                   </div>
+                 </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8 border-t pt-6 flex gap-4">
+              {item.status === 'CLOSED' && isIQA && !showReopenConfirm && !showDeleteConfirm && (
+                <button 
+                    onClick={() => setShowReopenConfirm(true)}
+                    className="text-blue-500 text-sm hover:underline hover:text-blue-700 flex items-center gap-2"
+                >
+                    <RotateCcw size={14}/> Reopen Entry
+                </button>
+              )}
+              
+              {!showDeleteConfirm && !showReopenConfirm && (
+                  <button 
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="text-red-500 text-sm hover:underline hover:text-red-700 flex items-center gap-2"
+                  >
+                      <Trash2 size={14}/> Delete Entry
+                  </button>
+              )}
+
+              {showDeleteConfirm && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 animate-fadeIn w-full">
+                      <h4 className="text-red-800 font-bold text-sm mb-2">Confirm Deletion</h4>
+                      <p className="text-red-600 text-xs mb-3">This action cannot be undone. Please enter your password to confirm.</p>
+                      <div className="flex gap-2 items-center">
+                          <input 
+                              type="password"
+                              className="border border-red-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-red-500"
+                              placeholder="Password"
+                              value={deletePassword}
+                              onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                          />
+                          <button onClick={confirmDelete} className="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-red-700">Confirm</button>
+                          <button onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }} className="text-gray-500 text-sm hover:text-gray-700 px-2">Cancel</button>
+                      </div>
+                      {deleteError && <p className="text-red-600 text-xs font-bold mt-2">{deleteError}</p>}
+                  </div>
+              )}
+
+              {showReopenConfirm && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 animate-fadeIn w-full">
+                      <h4 className="text-blue-800 font-bold text-sm mb-2">Confirm Reopen</h4>
+                      <p className="text-blue-600 text-xs mb-3">This will move the entry back to "Implementation". Please enter your password to confirm.</p>
+                      <div className="flex gap-2 items-center">
+                          <input 
+                              type="password"
+                              className="border border-blue-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                              placeholder="Password"
+                              value={reopenPassword}
+                              onChange={e => { setReopenPassword(e.target.value); setReopenError(''); }}
+                          />
+                          <button onClick={confirmReopen} className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-blue-700">Confirm Reopen</button>
+                          <button onClick={() => { setShowReopenConfirm(false); setReopenPassword(''); }} className="text-gray-500 text-sm hover:text-gray-700 px-2">Cancel</button>
+                      </div>
+                      {reopenError && <p className="text-red-600 text-xs font-bold mt-2">{reopenError}</p>}
+                  </div>
+              )}
+          </div>
+        
+            {item.status === 'IQA_VERIFICATION' && isIQA && (
+              <div className="space-y-4 bg-indigo-50 p-6 rounded-xl border border-indigo-100 mt-4">
+                 <h4 className="font-bold text-indigo-900 flex items-center gap-2 text-lg">
+                    <CheckCircle2 size={24}/> IQA Verification & Closure
+                 </h4>
+                 
+                 {item.type === 'RISK' && (
+                    <div className="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm mb-4">
+                        <h5 className="font-bold text-gray-800 text-sm mb-3">User's Residual Risk Assessment</h5>
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="block text-xs text-gray-500 uppercase">Input Scores</span>
+                                <span className="text-gray-600">Likelihood: {item.residualLikelihood} × Severity: {item.residualSeverity}</span>
+                            </div>
+                            <div>
+                                <span className="block text-xs text-gray-500 uppercase">Residual Rating</span>
+                                <span className="font-bold text-gray-800">{item.residualRiskRating} ({item.residualRiskLevel})</span>
+                            </div>
+                        </div>
+                    </div>
+                 )}
+
+                 <div className="space-y-4 bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div>
+                             <label className="block text-xs font-bold text-gray-600 uppercase mb-2">Implementation Verification</label>
+                             <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="implementation" value="IMPLEMENTED"
+                                        checked={iqaVerification.implementation === 'IMPLEMENTED'}
+                                        onChange={() => setIqaVerification({...iqaVerification, implementation: 'IMPLEMENTED'})}
+                                        className="accent-indigo-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Implemented</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="implementation" value="NOT_IMPLEMENTED"
+                                        checked={iqaVerification.implementation === 'NOT_IMPLEMENTED'}
+                                        onChange={() => setIqaVerification({...iqaVerification, implementation: 'NOT_IMPLEMENTED'})}
+                                        className="accent-red-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Not Implemented</span>
+                                </label>
+                             </div>
+                         </div>
+                         
+                         <div>
+                             <label className="block text-xs font-bold text-gray-600 uppercase mb-2">Effectiveness Verification</label>
+                             <div className="flex gap-4">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="effectiveness" value="EFFECTIVE"
+                                        checked={iqaVerification.effectiveness === 'EFFECTIVE'}
+                                        onChange={() => setIqaVerification({...iqaVerification, effectiveness: 'EFFECTIVE'})}
+                                        className="accent-indigo-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Effective</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input 
+                                        type="radio" name="effectiveness" value="NOT_EFFECTIVE"
+                                        checked={iqaVerification.effectiveness === 'NOT_EFFECTIVE'}
+                                        onChange={() => setIqaVerification({...iqaVerification, effectiveness: 'NOT_EFFECTIVE'})}
+                                        className="accent-red-600"
+                                    />
+                                    <span className="text-sm text-gray-800 font-medium">Not Effective</span>
+                                </label>
+                             </div>
+                         </div>
+                     </div>
+
+                     <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-2">Final Remarks</label>
+                        <textarea 
+                           className="w-full border rounded-lg p-3 text-sm bg-gray-50 text-gray-900 border-gray-300 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                           placeholder="Enter remarks regarding implementation evidence and effectiveness..."
+                           rows={3}
+                           value={iqaVerification.remarks} 
+                           onChange={e => setIqaVerification({...iqaVerification, remarks: e.target.value})} 
+                        />
+                     </div>
+                     
+                     <div className="pt-2">
+                        <button 
+                            onClick={handleSubmitIQAVerification}
+                            className={`w-full py-3 rounded-lg font-bold shadow-md transition flex items-center justify-center gap-2 ${
+                                iqaVerification.implementation === 'NOT_IMPLEMENTED' || iqaVerification.effectiveness === 'NOT_EFFECTIVE'
+                                ? 'bg-red-600 hover:bg-red-700 text-white' 
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                            }`}
+                        >
+                            {iqaVerification.implementation === 'NOT_IMPLEMENTED' || iqaVerification.effectiveness === 'NOT_EFFECTIVE'
+                             ? 'Reject & Revert to Implementation'
+                             : 'Verify Completion & Close Entry'
+                            }
+                        </button>
+                     </div>
+                 </div>
+              </div>
+            )}
+
+            {item.status === 'CLOSED' && (
+              <div className="space-y-4 mt-6 bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <p className="text-green-700 font-bold flex items-center gap-2 text-lg">
+                  <CheckCircle2 size={24} /> This entry is verified and closed.
+                </p>
+                <p className="text-sm text-gray-500 ml-8">Closed on {item.closedAt}</p>
+                
+                {item.effectivenessRemarks && (
+                   <div className="bg-white p-4 border border-gray-200 rounded-lg text-sm text-gray-600 ml-8 shadow-sm">
+                      <strong className="block text-gray-800 mb-1">Final Remarks / Effectiveness:</strong> 
+                      <div className="whitespace-pre-wrap">{item.effectivenessRemarks}</div>
+                      {item.type === 'RISK' && item.residualRiskRating && (
+                         <div className="mt-3 pt-3 border-t border-gray-100 flex gap-4">
+                             <div>
+                                 <span className="text-xs text-gray-400 uppercase">Residual Rating</span>
+                                 <div className="font-bold text-gray-800">{item.residualRiskRating}</div>
+                             </div>
+                             <div>
+                                 <span className="text-xs text-gray-400 uppercase">Residual Level</span>
+                                 <div className={`font-bold ${item.residualRiskLevel === 'CRITICAL' ? 'text-red-600' : 'text-green-600'}`}>{item.residualRiskLevel}</div>
+                             </div>
+                         </div>
+                      )}
+                   </div>
+                )}
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => void, onSave: (item: any) => void }) => {
+  const [step, setStep] = useState(1);
+  const [data, setData] = useState<Partial<RegistryItem>>({
+    section,
+    type: 'RISK',
+    actionPlans: [],
+    dateIdentified: new Date().toISOString().split('T')[0]
+  });
+  
+  const [isRefining, setIsRefining] = useState(false);
+  const [isGeneratingPlans, setIsGeneratingPlans] = useState(false);
+
+  const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
+
+  const isMandatoryAction = true;
+  const canSubmit = isMandatoryAction ? (data.actionPlans?.length ?? 0) > 0 : true;
+
+  const strategies = data.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
+
+  const handleNext = () => {
+    if (step === 1) {
+        if (!data.process || !data.source || !data.description || !data.dateIdentified) {
+            alert("Please fill in all required fields.");
+            return;
+        }
+    }
+    if (step === 2) {
+       if (data.type === 'RISK' && (!data.impactQMS || !data.likelihood || !data.severity || !data.existingControls)) {
+           alert("Please complete the risk assessment.");
+           return;
+       }
+       if (data.type === 'OPPORTUNITY' && (!data.expectedBenefit || !data.feasibility)) {
+           alert("Please complete the opportunity assessment.");
+           return;
+       }
+    }
+    setStep(step + 1);
+  }
+
+  const addActionPlan = () => {
+    if (!newPlan.description || !newPlan.strategy) return;
+    setData(prev => ({
+      ...prev,
+      actionPlans: [...(prev.actionPlans || []), { 
+        id: `AP-${Date.now()}`, 
+        ...newPlan, 
+        status: 'APPROVED'
+      }]
+    }));
+    setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
+  };
+
+  const removeActionPlan = (idx: number) => {
+    setData(prev => ({
+      ...prev,
+      actionPlans: prev.actionPlans?.filter((_, i) => i !== idx)
+    }));
+  };
+
+  const updateRisk = (l: number, s: number) => {
+    setData(prev => ({
+      ...prev,
+      likelihood: l,
+      severity: s,
+      riskRating: l * s,
+      riskLevel: calculateRiskLevel(l, s)
+    }));
+  };
+
+  const handleRefineDescription = async () => {
+     if (!data.description?.trim()) return;
+     setIsRefining(true);
+     try {
+         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const prompt = `Rewrite the following text into a formal, professional, ISO 9001 compliant description for a hospital Risk & Opportunities Registry. Keep it concise but specific. Avoid first-person phrasing.
+         
+         Context: "${data.description}"`;
+         
+         const response = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt
+         });
+         
+         const refinedText = response.text.trim();
+         const cleanText = refinedText.replace(/^"|"$/g, '');
+         setData(prev => ({ ...prev, description: cleanText }));
+     } catch (e) {
+         console.error("AI Refine Error:", e);
+         alert("Failed to refine description. Please check your internet connection.");
+     } finally {
+         setIsRefining(false);
+     }
+  };
+
+  const handleGenerateActionPlans = async () => {
+     if (!data.description) return;
+     setIsGeneratingPlans(true);
+     try {
+         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const prompt = `Generate 3 specific action plans for a hospital risk registry based on this description: "${data.description}" and type "${data.type}". 
+         Return JSON format. 
+         The targetDate should be 2 weeks from today (${new Date().toISOString().split('T')[0]}).
+         The strategy must be one of: ${Object.keys(strategies).join(', ')}.`;
+
+         const response = await ai.models.generateContent({
+             model: 'gemini-2.5-flash',
+             contents: prompt,
+             config: {
+                 responseMimeType: 'application/json',
+                 responseSchema: {
+                     type: Type.ARRAY,
+                     items: {
+                         type: Type.OBJECT,
+                         properties: {
+                             strategy: { type: Type.STRING },
+                             description: { type: Type.STRING },
+                             evidence: { type: Type.STRING },
+                             responsiblePerson: { type: Type.STRING },
+                             targetDate: { type: Type.STRING }
+                         }
+                     }
+                 }
+             }
+         });
+         
+         const plans = JSON.parse(response.text.trim());
+         if (Array.isArray(plans)) {
+             const newPlans: ActionPlan[] = plans.map((p: any) => ({
+                 id: `AP-${Date.now()}-${Math.random()}`,
+                 strategy: p.strategy,
+                 description: p.description,
+                 evidence: p.evidence,
+                 responsiblePerson: p.responsiblePerson,
+                 targetDate: p.targetDate,
+                 status: 'APPROVED'
+             }));
+             setData(prev => ({
+                 ...prev,
+                 actionPlans: [...(prev.actionPlans || []), ...newPlans]
+             }));
+         }
+     } catch (e) {
+         console.error("AI Action Plan Error:", e);
+         alert("Failed to generate action plans. Please try again.");
+     } finally {
+         setIsGeneratingPlans(false);
+     }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-osmak-green p-4 text-white flex justify-between items-center">
+          <h2 className="font-bold flex items-center gap-2"><PlusCircle size={20}/> New Registry Entry</h2>
+          <button onClick={onClose}><XCircle size={24} className="hover:text-osmak-200"/></button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex gap-2 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className={`h-2 flex-1 rounded-full ${i <= step ? 'bg-osmak-500' : 'bg-gray-200'}`} />
+            ))}
+          </div>
+
+          {step === 1 && (
+            <div className="space-y-4 animate-fadeIn">
+              <h3 className="font-bold text-lg text-gray-800">1. Context & Description</h3>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Entry Type</label>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setData({...data, type: 'RISK'})}
+                    className={`flex-1 py-3 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${data.type === 'RISK' ? 'border-red-500 bg-red-50 text-red-700' : 'border-gray-200 text-gray-500'}`}
+                  >
+                    <ShieldAlert size={20}/> Risk
+                  </button>
+                  <button 
+                    onClick={() => setData({...data, type: 'OPPORTUNITY'})}
+                    className={`flex-1 py-3 rounded-lg border-2 font-bold flex items-center justify-center gap-2 ${data.type === 'OPPORTUNITY' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-500'}`}
+                  >
+                    <Lightbulb size={20}/> Opportunity
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date Identified</label>
+                <input 
+                  type="date" 
+                  className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300"
+                  value={data.dateIdentified}
+                  onChange={e => setData({...data, dateIdentified: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Process / Function</label>
+                <input type="text" className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" value={data.process || ''} onChange={e => setData({...data, process: e.target.value})} placeholder="e.g. Document Control" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Source</label>
+                <div className="relative">
+                    <select 
+                        className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300 appearance-none"
+                        value={SOURCES.includes(data.source || '') ? data.source : 'Others'}
+                        onChange={e => {
+                            if (e.target.value === 'Others') setData({...data, source: ''});
+                            else setData({...data, source: e.target.value});
+                        }}
+                    >
+                        {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-3 text-gray-400 pointer-events-none" size={16} />
+                </div>
+                {(!SOURCES.includes(data.source || '') || data.source === '') && (
+                    <input 
+                        type="text" 
+                        className="w-full border p-2 rounded mt-2 bg-white text-gray-900 border-gray-300" 
+                        placeholder="Please specify source..."
+                        value={data.source || ''}
+                        onChange={e => setData({...data, source: e.target.value})}
+                    />
+                )}
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase">Description</label>
+                    <button 
+                        onClick={handleRefineDescription}
+                        disabled={!data.description || isRefining}
+                        className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 disabled:opacity-50 transition"
+                    >
+                        {isRefining ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} 
+                        Refine with AI
+                    </button>
+                </div>
+                <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.description || ''} onChange={e => setData({...data, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && data.type === 'RISK' && (
+            <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-bold text-lg text-gray-800">2. Risk Assessment</h3>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Potential Impact on QMS</label>
+                <textarea className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" value={data.impactQMS || ''} onChange={e => setData({...data, impactQMS: e.target.value})} />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Likelihood (1-5)</label>
+                    <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={data.likelihood || 1} onChange={e => updateRisk(parseInt(e.target.value), data.severity || 1)} />
+                    <div className="text-xs text-gray-500 mt-1 font-medium">{LIKELIHOOD_DESC[data.likelihood || 1]}</div>
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Severity (1-5)</label>
+                    <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={data.severity || 1} onChange={e => updateRisk(data.likelihood || 1, parseInt(e.target.value))} />
+                    <div className="text-xs text-gray-500 mt-1 font-medium">{SEVERITY_DESC[data.severity || 1]}</div>
+                 </div>
+              </div>
+
+              <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
+                 <div>
+                    <span className="text-gray-500 text-xs uppercase font-bold">Risk Rating</span>
+                    <div className="text-2xl font-bold text-gray-800">{data.riskRating || 1}</div>
+                 </div>
+                 <div className="text-right">
+                    <span className="text-gray-500 text-xs uppercase font-bold">Risk Level</span>
+                    <div className={`px-3 py-1 rounded-full text-sm font-bold uppercase ${getRiskColor(data.riskLevel)}`}>{data.riskLevel || 'LOW'}</div>
+                 </div>
+              </div>
+
+              <div className={`p-4 rounded-lg border text-sm ${
+                data.riskLevel === 'CRITICAL' ? 'bg-red-50 border-red-200 text-red-800' :
+                data.riskLevel === 'HIGH' ? 'bg-orange-50 border-orange-200 text-orange-800' :
+                data.riskLevel === 'MODERATE' ? 'bg-yellow-50 border-yellow-200 text-yellow-800' :
+                'bg-green-50 border-green-200 text-green-800'
+              }`}>
+                 <strong className="block mb-1">Mandated Action Strategy:</strong>
+                 {data.riskLevel === 'CRITICAL' && "Urgent Action Required. Immediate mitigation and Top Management attention."}
+                 {data.riskLevel === 'HIGH' && "Action Needed. Detailed mitigation plan required."}
+                 {data.riskLevel === 'MODERATE' && "Action Plan Required. Detailed mitigation or monitoring plan required."}
+                 {data.riskLevel === 'LOW' && "Action Plan Required. Detailed mitigation or monitoring plan required."}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Existing Controls</label>
+                <textarea className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" value={data.existingControls || ''} onChange={e => setData({...data, existingControls: e.target.value})} placeholder="What is currently in place?" />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && data.type === 'OPPORTUNITY' && (
+            <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-bold text-lg text-gray-800">2. Opportunity Assessment</h3>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expected Benefit</label>
+                <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.expectedBenefit || ''} onChange={e => setData({...data, expectedBenefit: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Feasibility</label>
+                <select className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" value={data.feasibility || 'MEDIUM'} onChange={e => setData({...data, feasibility: e.target.value as any})}>
+                    <option value="LOW">Low - Hard to implement</option>
+                    <option value="MEDIUM">Medium - Manageable</option>
+                    <option value="HIGH">High - Easy win</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6 animate-fadeIn">
+               <div className="flex justify-between items-center">
+                   <h3 className="font-bold text-lg text-gray-800">3. Action Planning</h3>
+                   <button 
+                       onClick={handleGenerateActionPlans}
+                       disabled={isGeneratingPlans || !data.description}
+                       className="text-xs flex items-center gap-1 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-100 hover:bg-purple-100 transition shadow-sm font-bold disabled:opacity-50"
+                   >
+                       {isGeneratingPlans ? <Loader2 size={14} className="animate-spin"/> : <Bot size={14}/>}
+                       Suggest Action Plans
+                   </button>
+               </div>
+               
+               {isMandatoryAction ? (
+                   <div className="bg-blue-50 text-blue-800 p-3 rounded text-sm mb-4 flex items-center gap-2">
+                      <Info size={16} /> Action Plan is <strong>MANDATORY</strong> for this entry.
+                   </div>
+               ) : (
+                   <div className="bg-gray-50 text-gray-600 p-3 rounded text-sm mb-4">
+                      Action Plan is optional for Low/Moderate risks, but recommended.
+                   </div>
+               )}
+
+               <div className="space-y-3">
+                  {data.actionPlans?.map((plan, idx) => (
+                      <div key={idx} className="bg-gray-50 p-3 rounded border border-gray-200 flex justify-between items-start animate-fadeIn">
+                          <div>
+                              <span className="text-xs font-bold uppercase text-gray-500">{plan.strategy}</span>
+                              <p className="font-medium text-sm text-gray-900">{plan.description}</p>
+                              <p className="text-xs text-gray-500 mt-1">By {plan.responsiblePerson} on {plan.targetDate}</p>
+                          </div>
+                          <button onClick={() => removeActionPlan(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                      </div>
+                  ))}
+               </div>
+
+               <div className="border rounded-lg p-4 bg-gray-50">
+                  <h4 className="font-bold text-sm text-gray-700 mb-3">Add Action Plan</h4>
+                  <div className="space-y-3">
+                     <div>
+                        <select 
+                            className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm"
+                            value={newPlan.strategy}
+                            onChange={e => setNewPlan({...newPlan, strategy: e.target.value})}
+                        >
+                            <option value="">Select Strategy...</option>
+                            {Object.keys(strategies).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        {newPlan.strategy && (
+                            <div className="text-xs text-gray-500 mt-1 p-2 bg-white rounded border">
+                                <strong>{strategies[newPlan.strategy].desc}</strong> <br/>
+                                <em className="text-gray-400">Ex: {strategies[newPlan.strategy].ex}</em>
+                            </div>
+                        )}
+                     </div>
+                     <textarea 
+                        className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                        placeholder="Describe the action..." 
+                        value={newPlan.description}
+                        onChange={e => setNewPlan({...newPlan, description: e.target.value})}
+                     />
+                     <input 
+                        className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                        placeholder="Verification / Evidence (e.g. Photo)" 
+                        value={newPlan.evidence}
+                        onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
+                     />
+                     <div className="grid grid-cols-2 gap-2">
+                        <input 
+                            className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                            placeholder="Responsible" 
+                            value={newPlan.responsiblePerson}
+                            onChange={e => setNewPlan({...newPlan, responsiblePerson: e.target.value})}
+                        />
+                        <input 
+                            type="date"
+                            className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
+                            value={newPlan.targetDate}
+                            onChange={e => setNewPlan({...newPlan, targetDate: e.target.value})}
+                        />
+                     </div>
+                     <button 
+                        onClick={addActionPlan}
+                        disabled={!newPlan.description || !newPlan.strategy}
+                        className="w-full bg-osmak-600 text-white py-2 rounded text-sm font-bold hover:bg-osmak-700 disabled:opacity-50"
+                     >
+                        + Add to List
+                     </button>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-4 animate-fadeIn text-center">
+               <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 size={32} />
+               </div>
+               <h3 className="font-bold text-xl text-gray-900">Ready to Submit?</h3>
+               <p className="text-gray-600">Please review your details. Once submitted, it will be available for IQA review.</p>
+               <div className="bg-gray-50 p-4 rounded text-left text-sm space-y-2">
+                  <p><strong>Type:</strong> {data.type}</p>
+                  <p><strong>Description:</strong> {data.description}</p>
+                  <p><strong>Actions Planned:</strong> {data.actionPlans?.length}</p>
+               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 bg-gray-50 border-t flex justify-between">
+          {step > 1 && <button onClick={() => setStep(step - 1)} className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded">Back</button>}
+          {step < 4 ? (
+            <button onClick={handleNext} className="ml-auto px-6 py-2 bg-osmak-700 text-white rounded font-bold hover:bg-osmak-800">Next</button>
+          ) : (
+            <button 
+                onClick={() => onSave(data)} 
+                disabled={!canSubmit}
+                className="ml-auto px-6 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {canSubmit ? 'Submit Entry' : 'Action Plan Required'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => (
+  <header className="md:hidden sticky top-0 z-50 bg-osmak-green text-white p-4 shadow-md flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="Logo" className="h-10 w-10 object-contain" />
+      <div>
+        <h1 className="text-sm font-extrabold tracking-wide uppercase leading-tight">OSPITAL NG MAKATI</h1>
+        <span className="text-[0.65rem] font-medium tracking-wider text-green-50 opacity-90 block">Risk & Opportunities Registry</span>
+      </div>
+    </div>
+    <button 
+      onClick={onMenuClick}
+      className="p-1.5 border-2 border-green-400 rounded hover:bg-green-700 transition text-white"
+    >
+      <Menu size={24} />
+    </button>
+  </header>
+);
+
+type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS';
+
+const App = () => {
+  const [user, setUser] = useState<string | null>(null);
+  const [items, setItems] = useState<RegistryItem[]>([]);
+  const [view, setView] = useState<AppView>('DASHBOARD');
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
+  const [selectedAuditTrailItem, setSelectedAuditTrailItem] = useState<RegistryItem | null>(null);
+  const [dbConnected, setDbConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [isSectionsOpen, setIsSectionsOpen] = useState(false);
+  const [closedFilterSection, setClosedFilterSection] = useState('');
+  
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  const [sortField, setSortField] = useState<'dateIdentified' | 'riskLevel' | 'status' | 'createdAt'>('dateIdentified');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  const [analysisStartDate, setAnalysisStartDate] = useState(new Date().getFullYear() + '-01-01');
+  const [analysisEndDate, setAnalysisEndDate] = useState(new Date().getFullYear() + '-12-31');
+
+  const [listFilterYear, setListFilterYear] = useState<string>('ALL');
+  const [listFilterStatus, setListFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
+  const [listFilterType, setListFilterType] = useState<'ALL' | 'RISK' | 'OPPORTUNITY'>('ALL');
+
+  const displayIdMap = useMemo(() => getDisplayIds(items), [items]);
+
+  const availableYears = useMemo(() => {
+    const years = new Set(
+        items
+            .filter(i => i.dateIdentified)
+            .map(i => i.dateIdentified.split('-')[0])
+    );
+    return Array.from(years).sort().reverse();
+  }, [items]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.from('registry_items').select('*');
+      if (error) throw error;
+      if (data) {
+        const mappedItems = data.map(mapFromDb);
+        setItems(mappedItems);
+        
+        // Sync currently selected items if they are open, to reflect realtime changes
+        setSelectedItem(prev => {
+           if (!prev) return null;
+           const match = mappedItems.find(i => i.id === prev.id);
+           return match ? match : prev;
+        });
+
+        setSelectedAuditTrailItem(prev => {
+           if (!prev) return null;
+           const match = mappedItems.find(i => i.id === prev.id);
+           return match ? match : prev;
+        });
+
+        setDbConnected(true);
+      }
+    } catch (err) {
+      console.error('Supabase connection error:', err);
+      setDbConnected(false);
+      setItems([]); 
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+        fetchData();
+        
+        const channel = supabase
+          .channel('registry_db_changes')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'registry_items' },
+            (payload) => {
+              console.log('Realtime change detected:', payload);
+              fetchData();
+            }
+          )
+          .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        }
+    }
+  }, [user, fetchData]);
+
+  const handleCreate = async (newItem: Partial<RegistryItem>) => {
+    const initialEvent: AuditEvent = {
+      timestamp: new Date().toISOString(),
+      event: 'Entry Created',
+      user: newItem.section || 'System',
+    };
+
+    const item: RegistryItem = {
+      ...newItem as RegistryItem,
+      id: `${newItem.type === 'RISK' ? 'R' : 'O'}-${Date.now().toString().slice(-6)}`,
+      status: 'IMPLEMENTATION',
+      createdAt: new Date().toISOString().split('T')[0],
+      riskLevel: newItem.type === 'RISK' ? calculateRiskLevel(newItem.likelihood || 1, newItem.severity || 1) : undefined,
+      auditTrail: [initialEvent]
+    };
+
+    try {
+        const { error } = await supabase.from('registry_items').insert(mapToDb(item));
+        if (error) throw error;
+        setItems(prev => [item, ...prev]);
+        setIsWizardOpen(false);
+    } catch (err) {
+        alert("Failed to save to database. Please check connection.");
+        console.error(err);
+    }
+  };
+
+  const handleUpdate = async (updatedItem: RegistryItem) => {
+    try {
+        const { error } = await supabase.from('registry_items').update(mapToDb(updatedItem)).eq('id', updatedItem.id);
+        if (error) throw error;
+        setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+        setSelectedItem(updatedItem);
+    } catch (err) {
+        alert("Update failed.");
+        console.error(err);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+      try {
+          const { error } = await supabase.from('registry_items').delete().eq('id', id);
+          if (error) throw error;
+          setItems(prev => prev.filter(i => i.id !== id));
+          setSelectedItem(null);
+      } catch (err) {
+          alert("Delete failed.");
+          console.error(err);
+      }
+  }
+
+  const exportCSV = (data: RegistryItem[], filename: string) => {
+    const headers = [
+        'Ref #','Process/Function','Source','Description of Risk','Type (Risk or Opportunity)','Potential Impact on QMS','Likelihood','Severity','Risk Rating','Risk Level','Existing Controls/Mitigation','Action Plan','Responsible Person','Target Completion Date','Verification/Evidence','Status (Open or Closed)','Date of Re-Assessment','Residual Likelihood','Residual Severity','Residual Risk Rating','Residual Risk Level','Remarks on Effectiveness'
+    ];
+
+    const formatCell = (value: any) => {
+        if (value === null || value === undefined) return '""';
+        const stringValue = String(value);
+        const escapedValue = stringValue.replace(/"/g, '""');
+        if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+             return `"${escapedValue}"`;
+        }
+        return stringValue;
+    };
+
+    const rows = data.map(item => {
+        const actionPlansDesc = item.actionPlans.map(p => p.description).join('; ');
+        const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
+        const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
+        const evidences = item.actionPlans.map(p => p.evidence).join('; ');
+
+        const rowData = [
+            displayIdMap[item.id] || item.id, item.process, item.source, item.description, item.type, item.impactQMS, item.likelihood, item.severity, item.riskRating, item.riskLevel, item.existingControls, actionPlansDesc, responsiblePersons, targetDates, evidences, item.status === 'CLOSED' ? 'Closed' : 'Open', item.reassessmentDate, item.residualLikelihood, item.residualSeverity, item.residualRiskRating, item.residualRiskLevel, item.effectivenessRemarks
+        ];
+        
+        return rowData.map(val => formatCell(val || '')).join(',');
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+
+  const handleSort = (field: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt') => {
+      if (sortField === field) {
+          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortField(field);
+          setSortDirection('desc');
+      }
+  };
+
+  const sortItems = (data: RegistryItem[]) => {
+      return [...data].sort((a, b) => {
+          let valA: any = a[sortField];
+          let valB: any = b[sortField];
+          
+          if (sortField === 'riskLevel') {
+              const levels = { 'LOW': 1, 'MODERATE': 2, 'HIGH': 3, 'CRITICAL': 4 };
+              valA = levels[a.riskLevel || 'LOW'] || 0;
+              valB = levels[b.riskLevel || 'LOW'] || 0;
+          }
+          
+          if (sortField === 'createdAt') {
+              valA = a.createdAt;
+              valB = b.createdAt;
+          }
+
+          if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+          if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+          return 0;
+      });
+  };
+
+  const isIQA = IQA_USERS.includes(user || '');
+  const activeSection = isIQA && selectedSection ? selectedSection : user;
+  
+  const contextItems = useMemo(() => {
+     if (isIQA && !selectedSection) return items;
+     return items.filter(i => i.section === activeSection);
+  }, [items, isIQA, selectedSection, activeSection]);
+
+  const highRisks = contextItems.filter(i => i.type === 'RISK' && (i.riskLevel === 'HIGH' || i.riskLevel === 'CRITICAL') && i.status !== 'CLOSED');
+  const openRisks = contextItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
+  const openOpps = contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
+  
+  const allOpenRisks = items.filter(i => i.type === 'RISK' && i.status !== 'CLOSED');
+  const allOpenOpps = items.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED');
+
+  const pendingIQA = items.filter(i => 
+    (i.status === 'IMPLEMENTATION' && i.actionPlans.some(ap => ap.status === 'FOR_VERIFICATION')) ||
+    (i.status === 'IQA_VERIFICATION')
+  );
+  
+  const filteredROList = useMemo(() => {
+    return contextItems.filter(item => {
+        if (listFilterYear !== 'ALL' && (!item.dateIdentified || !item.dateIdentified.startsWith(listFilterYear))) return false;
+        if (listFilterStatus === 'OPEN' && item.status === 'CLOSED') return false;
+        if (listFilterStatus === 'CLOSED' && item.status !== 'CLOSED') return false;
+        if (listFilterType !== 'ALL' && item.type !== listFilterType) return false;
+        return true;
+    });
+  }, [contextItems, listFilterYear, listFilterStatus, listFilterType]);
+
+  const renderTable = (data: RegistryItem[], showDays = false, isClosed = false, type: EntryType | 'BOTH' = 'RISK', maxHeight?: string) => {
+    const sortedData = sortItems(data);
+    
+    return (
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col`}>
+      {view === 'DASHBOARD' && !isClosed && type === 'RISK' && (
+          <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b shrink-0">
+              <h3 className="font-bold text-gray-700">Open Risks</h3>
+              <button onClick={() => exportCSV(data, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                  <Download size={14}/> CSV
+              </button>
+          </div>
+      )}
+
+      <div className={`overflow-x-auto ${maxHeight ? `${maxHeight} overflow-y-auto` : ''}`}>
+        <table className="w-full text-left text-sm relative">
+          <thead className="bg-gray-50 text-gray-500 font-medium border-b sticky top-0 z-10 shadow-sm">
+            <tr>
+              <th 
+                className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
+                onClick={() => handleSort('createdAt')}
+              >
+                  <div className="flex items-center gap-1">Ref # <ArrowUpDown size={14} className={sortField === 'createdAt' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
+                  onClick={() => handleSort('dateIdentified')}
+              >
+                  <div className="flex items-center gap-1">Date <ArrowUpDown size={14} className={sortField === 'dateIdentified' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              <th className="px-6 py-4 w-1/3 min-w-[200px]">Description</th>
+              <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
+                  onClick={() => handleSort('status')}
+              >
+                  <div className="flex items-center gap-1">Status <ArrowUpDown size={14} className={sortField === 'status' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              {type === 'BOTH' ? (
+                <th className="px-6 py-4 whitespace-nowrap">Type</th>
+              ) : null}
+              <th 
+                  className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
+                  onClick={() => handleSort('riskLevel')}
+              >
+                  <div className="flex items-center gap-1">Level / Feasibility <ArrowUpDown size={14} className={sortField === 'riskLevel' ? 'text-gray-600' : 'text-gray-300'}/></div>
+              </th>
+              {showDays && <th className="px-6 py-4 whitespace-nowrap">Target</th>}
+              <th className="px-6 py-4 text-center whitespace-nowrap">History</th>
+              <th className="px-6 py-4"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {sortedData.length === 0 ? (
+                <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400 italic">No records found.</td></tr>
+            ) : sortedData.map(item => {
+              const days = getDaysRemaining(item);
+              const refId = displayIdMap[item.id] || item.id;
+              return (
+                <tr key={item.id} className="hover:bg-gray-50 transition group">
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-mono text-xs text-gray-500 font-bold cursor-pointer group-hover:text-gray-800 align-top">
+                      {refId}
+                  </td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-gray-600 text-xs cursor-pointer align-top whitespace-nowrap">
+                      {item.dateIdentified}
+                      <div className="text-[10px] text-gray-300 mt-0.5">DATE</div>
+                  </td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-medium text-gray-800 text-sm cursor-pointer align-top">{item.description}</td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${getPillColor(item.status)}`}>
+                      {formatStatus(item.status)}
+                    </span>
+                  </td>
+                  {type === 'BOTH' ? (
+                    <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${item.type === 'RISK' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                        {item.type}
+                      </span>
+                    </td>
+                  ) : null}
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
+                     {item.type === 'RISK' ? (
+                        <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide ${getLevelPillColor(item.riskLevel)}`}>{item.riskLevel}</span>
+                     ) : (
+                        <span className="text-green-600 font-bold text-xs">{item.feasibility}</span>
+                     )}
+                  </td>
+                  {showDays && (
+                      <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top whitespace-nowrap">
+                          {days ? (
+                              <div className="flex flex-col">
+                                  <span className={`text-xs font-bold ${days.days < 0 ? 'text-red-500' : 'text-orange-500'}`}>
+                                      {days.days < 0 ? `${Math.abs(days.days)} days late` : days.days === 0 ? 'Due today' : `${days.days} days left`}
+                                  </span>
+                              </div>
+                          ) : (
+                              <span className="text-gray-300 text-xs">-</span>
+                          )}
+                      </td>
+                  )}
+                  <td className="px-6 py-4 text-center align-top">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAuditTrailItem(item);
+                      }}
+                      className="text-gray-300 hover:text-gray-600 transition-colors p-1"
+                      title="View Audit Trail"
+                    >
+                      <RotateCcw size={16} />
+                    </button>
+                  </td>
+                  <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-right cursor-pointer align-top">
+                    <ChevronRight size={16} className="text-gray-300 group-hover:text-gray-500" />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )};
+
+  const DonutChart = ({ title, data, colors }: DonutChartProps) => {
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    let currentAngle = 0;
+
+    return (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col items-center">
+            <h3 className="text-sm font-bold text-gray-600 mb-4 w-full text-left">{title}</h3>
+            <div className="relative w-40 h-40">
+                <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+                    {Object.entries(data).map(([key, value]) => {
+                        if (value === 0) return null;
+                        const percentage = value / total;
+                        const angle = percentage * 360;
+                        const x1 = 50 + 40 * Math.cos((currentAngle * Math.PI) / 180);
+                        const y1 = 50 + 40 * Math.sin((currentAngle * Math.PI) / 180);
+                        const x2 = 50 + 40 * Math.cos(((currentAngle + angle) * Math.PI) / 180);
+                        const y2 = 50 + 40 * Math.sin(((currentAngle + angle) * Math.PI) / 180);
+                        
+                        const largeArcFlag = percentage > 0.5 ? 1 : 0;
+                        
+                        const pathData = total === value 
+                            ? `M 50 10 A 40 40 0 1 1 49.99 10`
+                            : `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+
+                        const slice = (
+                            <path
+                                key={key}
+                                d={pathData}
+                                fill={colors[key] || '#ccc'}
+                                stroke="white"
+                                strokeWidth="2"
+                            />
+                        );
+                        currentAngle += angle;
+                        return slice;
+                    })}
+                    {total === 0 && (
+                        <circle cx="50" cy="50" r="40" fill="#f3f4f6" />
+                    )}
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center">
+                        <span className="text-2xl font-bold text-gray-800">{total}</span>
+                        <span className="text-[10px] text-gray-400 uppercase">Total</span>
+                    </div>
+                </div>
+            </div>
+            <div className="mt-6 w-full space-y-2">
+                {Object.entries(data).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: colors[key] }}></span>
+                            <span className="text-gray-600">{key}</span>
+                        </div>
+                        <span className="font-bold text-gray-800">{value} ({total > 0 ? Math.round((value/total)*100) : 0}%)</span>
+                    </div>
+                ))}
             </div>
         </div>
     );
-};
+  };
 
-const App = () => {
-    const [user, setUser] = useState<string | null>(null);
-    const [items, setItems] = useState<RegistryItem[]>([]);
-    const [view, setView] = useState('dashboard');
-    const [loading, setLoading] = useState(false);
-    
-    // Modal States
-    const [showWizard, setShowWizard] = useState(false);
-    const [showManual, setShowManual] = useState(false);
-    const [showTrail, setShowTrail] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<RegistryItem | null>(null);
-    const [trailItem, setTrailItem] = useState<RegistryItem | null>(null);
+  const RiskHeatmap = ({ items }: { items: RegistryItem[] }) => {
+      const matrix = Array(5).fill(0).map(() => Array(5).fill(0));
+      
+      items.filter(i => i.type === 'RISK').forEach(item => {
+          if (item.likelihood && item.severity) {
+              const row = 5 - item.likelihood;
+              const col = item.severity - 1;
+              matrix[row][col]++;
+          }
+      });
 
-    const isIQA = IQA_USERS.includes(user || '');
+      const getCellColor = (l: number, s: number, count: number) => {
+          const rating = l * s;
+          let baseColor = '';
+          if (rating >= 16) baseColor = 'bg-red-100 text-red-800 border-red-200';
+          else if (rating >= 11) baseColor = 'bg-orange-100 text-orange-800 border-orange-200';
+          else if (rating >= 6) baseColor = 'bg-yellow-100 text-yellow-800 border-yellow-200';
+          else baseColor = 'bg-green-100 text-green-800 border-green-200';
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        const { data, error } = await supabase.from('registry_items').select('*');
-        if (!error && data) {
-            const mapped = data.map(mapFromDb);
-            setItems(mapped);
+          if (count > 0) {
+             if (rating >= 16) return 'bg-red-500 text-white font-bold';
+             if (rating >= 11) return 'bg-orange-500 text-white font-bold';
+             if (rating >= 6) return 'bg-yellow-400 text-black font-bold';
+             return 'bg-green-500 text-white font-bold';
+          }
+          return baseColor + ' opacity-40';
+      };
 
-            // Sync open modals with fresh data
-            if (selectedItem) {
-                const freshSelected = mapped.find(i => i.id === selectedItem.id);
-                if (freshSelected) setSelectedItem(freshSelected);
-            }
-            if (trailItem) {
-                const freshTrail = mapped.find(i => i.id === trailItem.id);
-                if (freshTrail) setTrailItem(freshTrail);
-            }
-        }
-        setLoading(false);
-    }, [selectedItem, trailItem]);
+      return (
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><Activity size={20}/> Risk Matrix Heatmap</h3>
+              <div className="flex">
+                  <div className="flex flex-col justify-between mr-4 py-8 h-64">
+                      <span className="text-xs font-bold text-gray-400 -rotate-90">Likelihood</span>
+                  </div>
+                  <div className="flex-1">
+                      <div className="grid grid-rows-5 gap-1 h-64">
+                          {[5, 4, 3, 2, 1].map((likelihood, rowIndex) => (
+                              <div key={likelihood} className="grid grid-cols-5 gap-1">
+                                  {[1, 2, 3, 4, 5].map((severity, colIndex) => {
+                                      const count = matrix[rowIndex][colIndex];
+                                      return (
+                                          <div 
+                                              key={`${likelihood}-${severity}`} 
+                                              className={`rounded flex items-center justify-center text-sm transition hover:opacity-100 cursor-default ${getCellColor(likelihood, severity, count)}`}
+                                              title={`L:${likelihood} x S:${severity} = ${likelihood * severity}`}
+                                          >
+                                              {count > 0 ? count : ''}
+                                          </div>
+                                      );
+                                  })}
+                              </div>
+                          ))}
+                      </div>
+                      <div className="grid grid-cols-5 mt-2 text-center text-xs font-bold text-gray-400">
+                          <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                      </div>
+                      <div className="text-center mt-1 text-xs font-bold text-gray-400">Severity</div>
+                  </div>
+              </div>
+          </div>
+      )
+  }
 
-    // Realtime Subscription
-    useEffect(() => {
-        const channel = supabase.channel('realtime_registry')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'registry_items' }, () => {
-                fetchData();
-            })
-            .subscribe();
+  const renderAnalysisDashboard = () => {
+    const filteredItems = items.filter(i => {
+       const dateToCheck = i.closedAt || i.createdAt;
+       return dateToCheck >= analysisStartDate && dateToCheck <= analysisEndDate;
+    });
 
-        return () => { supabase.removeChannel(channel); };
-    }, [fetchData]);
+    const totalRisks = filteredItems.filter(i => i.type === 'RISK').length;
+    const totalOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY').length;
 
-    // Initial Fetch on Login
-    useEffect(() => {
-        if (user) fetchData();
-    }, [user, fetchData]);
+    const totalOpenRisks = filteredItems.filter(i => i.type === 'RISK' && i.status !== 'CLOSED').length;
+    const totalOpenOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY' && i.status !== 'CLOSED').length;
 
-    const handleCreate = async (newItem: Partial<RegistryItem>) => {
-        setLoading(true);
-        const item: RegistryItem = {
-            id: crypto.randomUUID(),
-            ...newItem as any,
-            status: 'IMPLEMENTATION',
-            createdAt: new Date().toISOString(),
-            auditTrail: []
-        };
-        const withAudit = addAuditEvent(item, 'Entry Created', user!);
-        
-        const { error } = await supabase.from('registry_items').insert(mapToDb(withAudit));
-        if (!error) {
-            setShowWizard(false);
-            fetchData();
-        } else {
-            alert('Error creating entry');
-        }
-        setLoading(false);
+    const totalClosedRisks = filteredItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED').length;
+    const totalClosedOpps = filteredItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED').length;
+
+    const closedRisksBySection: Record<string, number> = {};
+    SECTIONS.filter(s => !s.startsWith('IQA')).forEach(s => closedRisksBySection[s] = 0);
+
+    filteredItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED').forEach(i => {
+       if (closedRisksBySection[i.section] !== undefined) {
+           closedRisksBySection[i.section]++;
+       }
+    });
+
+    const maxClosed = Math.max(...Object.values(closedRisksBySection), 1);
+
+    const riskLevelData = {
+        'Low': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'LOW').length,
+        'Moderate': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'MODERATE').length,
+        'High': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'HIGH').length,
+        'Critical': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'CRITICAL').length
     };
 
-    const handleDelete = async (item: RegistryItem) => {
-        if (!confirm('Are you sure you want to delete this entry? This cannot be undone.')) return;
-        const { error } = await supabase.from('registry_items').delete().eq('id', item.id);
-        if (!error) fetchData();
-    };
+    const sourceData: Record<string, number> = {};
+    filteredItems.forEach(i => {
+        const src = i.source || 'Unspecified';
+        sourceData[src] = (sourceData[src] || 0) + 1;
+    });
 
-    const handleReopen = async (item: RegistryItem) => {
-        const pass = prompt('Enter IQA Password to Reopen:');
-        // Simplified check for demo
-        if (pass !== 'admin123') return alert('Invalid password');
-        
-        const updated = addAuditEvent({ ...item, status: 'IMPLEMENTATION' }, 'Entry Reopened', user!);
-        const { error } = await supabase.from('registry_items').update(mapToDb(updated)).eq('id', item.id);
-        if (!error) fetchData();
-    };
+    const sortedSources = Object.entries(sourceData).sort((a,b) => b[1] - a[1]);
+    const topSources = sortedSources.slice(0, 5);
+    const otherSourcesCount = sortedSources.slice(5).reduce((acc, curr) => acc + curr[1], 0);
+    const finalSourceData: Record<string, number> = {};
+    topSources.forEach(([k,v]) => finalSourceData[k] = v);
+    if (otherSourcesCount > 0) finalSourceData['Others'] = otherSourcesCount;
 
-    if (!user) return <Login onLogin={setUser} />;
 
     return (
-        <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
-            {/* Sidebar */}
-            <aside className="w-64 bg-osmak-green flex flex-col shadow-2xl z-20 hidden md:flex">
-                <SidebarHeader onClose={() => {}} />
-                <nav className="flex-1 px-3 py-6 space-y-2">
-                    <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view==='dashboard' ? 'bg-white/10 text-white font-bold shadow-inner' : 'text-green-100 hover:bg-green-700/50'}`}>
-                        <LayoutDashboard size={20}/> Dashboard
-                    </button>
-                    <button onClick={() => setView('list')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view==='list' ? 'bg-white/10 text-white font-bold shadow-inner' : 'text-green-100 hover:bg-green-700/50'}`}>
-                        <ListFilter size={20}/> R&O List
-                    </button>
-                    <button onClick={() => setView('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view==='analysis' ? 'bg-white/10 text-white font-bold shadow-inner' : 'text-green-100 hover:bg-green-700/50'}`}>
-                        <BarChart3 size={20}/> Data Analysis
-                    </button>
-                </nav>
-                <div className="p-4 bg-green-900/30">
-                    <div className="flex items-center gap-3 text-green-100 mb-4">
-                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs">{user.charAt(0)}</div>
-                        <div className="text-xs font-medium truncate flex-1">{user}</div>
+       <div className="space-y-8 animate-fadeIn">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-wrap gap-4 items-end">
+             <div className="flex items-center gap-2 text-osmak-green-dark font-bold mb-1"><Filter size={20}/> Date Filter</div>
+             <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">From</label>
+                <input type="date" className="border rounded p-2 text-sm bg-white" value={analysisStartDate} onChange={e => setAnalysisStartDate(e.target.value)} />
+             </div>
+             <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1">To</label>
+                <input type="date" className="border rounded p-2 text-sm bg-white" value={analysisEndDate} onChange={e => setAnalysisEndDate(e.target.value)} />
+             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Total Risks Recorded</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{totalRisks}</p>
+                        <p className="text-xs text-gray-400 mt-1">Open + Closed</p>
                     </div>
-                    <button onClick={() => setUser(null)} className="w-full flex items-center justify-center gap-2 text-xs bg-red-500/80 hover:bg-red-600 text-white py-2 rounded transition">
-                        <LogOut size={14}/> Sign Out
-                    </button>
-                </div>
-            </aside>
+                    <div className="bg-gray-100 p-2 rounded-lg text-gray-600"><Layers size={24}/></div>
+                  </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Active Open Risks</p>
+                        <p className="text-3xl font-bold text-orange-600 mt-2">{totalOpenRisks}</p>
+                        <p className="text-xs text-gray-400 mt-1">Requiring action/monitoring</p>
+                    </div>
+                    <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><ShieldAlert size={24}/></div>
+                  </div>
+              </div>
 
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden relative">
-                <AppHeader title={view.replace(/_/g, ' ')} subtitle={`Logged in as: ${user}`} onRefresh={fetchData} />
-                
-                <div className="flex-1 overflow-y-auto p-6 md:p-10 relative">
-                    {/* Floating Action Button */}
-                    {!isIQA && (
-                        <button onClick={() => setShowWizard(true)} className="fixed bottom-8 right-8 bg-osmak-green text-white p-4 rounded-full shadow-2xl hover:bg-green-700 hover:scale-110 transition z-40 flex items-center gap-2 group">
-                            <PlusCircle size={24}/> <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 font-bold whitespace-nowrap">New Entry</span>
-                        </button>
-                    )}
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Closed Risks</p>
+                        <p className="text-3xl font-bold text-green-600 mt-2">{totalClosedRisks}</p>
+                        <p className="text-xs text-gray-400 mt-1">Successfully treated</p>
+                    </div>
+                    <div className="bg-green-100 p-2 rounded-lg text-green-600"><CheckCircle2 size={24}/></div>
+                  </div>
+              </div>
 
-                    {view === 'dashboard' && <Dashboard items={items} section={isIQA ? 'All' : user} isIQA={isIQA} />}
-                    
-                    {view === 'list' && (
-                        <RegistryList 
-                            items={items} 
-                            section={isIQA ? 'All' : user} 
-                            isIQA={isIQA} 
-                            onView={(i: any) => setSelectedItem(i)}
-                            onEdit={(i: any) => setSelectedItem(i)}
-                            onDelete={handleDelete}
-                            onHistory={(i: any) => { setTrailItem(i); setShowTrail(true); }}
-                            onReopen={handleReopen}
-                        />
-                    )}
+               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Total Opportunities</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{totalOpps}</p>
+                        <p className="text-xs text-gray-400 mt-1">Open + Closed</p>
+                    </div>
+                    <div className="bg-gray-100 p-2 rounded-lg text-gray-600"><Layers size={24}/></div>
+                  </div>
+              </div>
 
-                    {view === 'analysis' && (
-                        <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                             <BarChart3 size={64} className="mb-4 text-gray-300"/>
-                             <h3 className="text-xl font-bold">Data Analysis Module</h3>
-                             <p>Analytics charts will appear here.</p>
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Active Opportunities</p>
+                        <p className="text-3xl font-bold text-blue-600 mt-2">{totalOpenOpps}</p>
+                        <p className="text-xs text-gray-400 mt-1">In progress</p>
+                    </div>
+                    <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Lightbulb size={24}/></div>
+                  </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Closed Opportunities</p>
+                        <p className="text-3xl font-bold text-teal-600 mt-2">{totalClosedOpps}</p>
+                        <p className="text-xs text-gray-400 mt-1">Realized/Concluded</p>
+                    </div>
+                    <div className="bg-teal-100 p-2 rounded-lg text-teal-600"><CheckCircle2 size={24}/></div>
+                  </div>
+              </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <DonutChart 
+                  title="Risk Level Distribution"
+                  data={riskLevelData}
+                  colors={{
+                      'Low': '#4ade80',
+                      'Moderate': '#facc15',
+                      'High': '#fb923c',
+                      'Critical': '#ef4444'
+                  }}
+              />
+
+              <DonutChart 
+                  title="Entries by Source"
+                  data={finalSourceData}
+                  colors={{
+                      'Internal Audit': '#60a5fa',
+                      'Incidents': '#f87171',
+                      'Complaints': '#fbbf24',
+                      'Nonconformities': '#a78bfa',
+                      'Others': '#9ca3af'
+                  }}
+              />
+
+              <RiskHeatmap items={filteredItems} />
+          </div>
+
+          {isIQA && !selectedSection && (
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 className="font-bold text-gray-800 mb-6 flex items-center gap-2"><BarChart3 size={20}/> Closed Risks by Section</h3>
+                <div className="space-y-3">
+                    {Object.entries(closedRisksBySection).map(([sec, count]) => (
+                    <div key={sec} className="flex items-center gap-4 text-sm">
+                        <div className="w-64 text-right font-medium text-gray-600 truncate" title={sec}>{sec}</div>
+                        <div className="flex-1 h-8 bg-gray-100 rounded-full overflow-hidden relative">
+                            <div 
+                                className="h-full bg-osmak-green rounded-full transition-all duration-500 flex items-center justify-end px-2 text-white font-bold text-xs"
+                                style={{ width: `${(count / maxClosed) * 100}%` }}
+                            >
+                                {count > 0 && count}
+                            </div>
                         </div>
-                    )}
+                        <div className="w-8 font-bold text-gray-700">{count}</div>
+                    </div>
+                    ))}
                 </div>
-            </main>
-
-            {/* Modals */}
-            {showWizard && <EntryWizard onClose={() => setShowWizard(false)} onSubmit={handleCreate} section={user || ''} />}
-            {showManual && <UserManualModal onClose={() => setShowManual(false)} />}
-            {showTrail && trailItem && <AuditTrailModal trail={trailItem.auditTrail} itemId={trailItem.id.substring(0,8)} onClose={() => setShowTrail(false)} />}
-        </div>
+            </div>
+          )}
+       </div>
     );
+  };
+
+  const handleViewChange = (newView: AppView) => {
+    setView(newView);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleSectionSelect = (s: string) => {
+    setSelectedSection(s);
+    setView('DASHBOARD');
+    setIsMobileMenuOpen(false);
+  }
+
+  if (!user) return <Login onLogin={setUser} />;
+
+  return (
+    <div className="flex min-h-screen bg-gray-100 font-sans text-gray-900">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-[#009a3e] flex items-center justify-between px-4 z-40 shadow-md">
+         <div className="flex items-center gap-2">
+            <img 
+               src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" 
+               alt="Logo" 
+               className="h-8 w-auto object-contain"
+            />
+            <div className="flex flex-col">
+               <span className="text-white font-bold text-sm tracking-wide uppercase">Ospital ng Makati</span>
+               <span className="text-white text-[0.65rem] opacity-90 tracking-wide">Risk & Opportunities Registry</span>
+            </div>
+         </div>
+         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white p-2">
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+         </button>
+      </div>
+
+
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside className={`w-72 bg-white text-gray-800 flex flex-col shadow-2xl z-50 fixed inset-y-0 left-0 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <SidebarHeader onClose={() => setIsMobileMenuOpen(false)} />
+        
+        <div className="p-6 border-b border-gray-200 bg-gray-50">
+           <div className="text-xs uppercase text-gray-500 font-bold mb-1">Logged in as</div>
+           <div className="font-bold text-lg truncate text-osmak-green-dark">{user}</div>
+           {isIQA && !selectedSection && <span className="text-xs bg-indigo-600 px-2 py-0.5 rounded text-white mt-1 inline-block">IQA</span>}
+           {selectedSection && <button onClick={() => { setSelectedSection(null); handleViewChange('DASHBOARD'); }} className="text-xs text-yellow-600 underline mt-2 hover:text-yellow-700">Exit Section View</button>}
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto scrollbar-hide">
+          <button 
+             onClick={() => handleViewChange('DASHBOARD')}
+             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'DASHBOARD' ? 'bg-osmak-green text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
+            <LayoutDashboard size={20} /> Dashboard
+          </button>
+
+          {(!isIQA || selectedSection) ? (
+             <>
+                <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">Registries</div>
+                <button 
+                    onClick={() => handleViewChange('RO_LIST')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'RO_LIST' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <ClipboardList size={20} /> R&O List
+                </button>
+                <button 
+                    onClick={() => handleViewChange('IQA_ANALYSIS')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <BarChart3 size={20} /> Data Analysis
+                </button>
+             </>
+          ) : (
+             <>
+                <div className="pt-4 pb-2 text-xs font-bold text-gray-400 uppercase px-4">IQA Overview</div>
+                <button 
+                    onClick={() => handleViewChange('IQA_PENDING')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_PENDING' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <ClipboardList size={20} /> Pending Tasks
+                    {pendingIQA.length > 0 && <span className="bg-red-500 text-white text-xs px-2 rounded-full ml-auto">{pendingIQA.length}</span>}
+                </button>
+                <button 
+                    onClick={() => handleViewChange('RO_LIST')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'RO_LIST' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <ClipboardList size={20} /> R&O List
+                </button>
+                
+                <button 
+                    onClick={() => handleViewChange('IQA_ANALYSIS')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <BarChart3 size={20} /> Data Analysis
+                </button>
+
+                <button 
+                    onClick={() => setIsSectionsOpen(!isSectionsOpen)}
+                    className="w-full flex items-center justify-between pt-4 pb-2 px-4 text-xs font-bold text-gray-400 uppercase hover:text-gray-600 transition group"
+                >
+                    <span>Hospital Sections</span>
+                    {isSectionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+                
+                {isSectionsOpen && (
+                    <div className="space-y-1 animate-fadeIn">
+                        {SECTIONS.filter(s => !s.startsWith('IQA')).map(s => (
+                            <button 
+                                key={s}
+                                onClick={() => handleSectionSelect(s)}
+                                className={`w-full flex items-start text-left gap-3 px-4 py-2 rounded-lg transition text-sm ${selectedSection === s ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                            >
+                                <Building2 size={16} className="shrink-0 mt-0.5" /> <span>{s}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+             </>
+          )}
+        </nav>
+        
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+            <button 
+                onClick={() => setUser(null)} 
+                className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 font-bold py-2.5 rounded-lg hover:bg-gray-100 transition-colors shadow-sm"
+            >
+                <LogOut size={20} />
+                <span>Sign Out</span>
+            </button>
+        </div>
+      </aside>
+
+
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pt-20 md:pt-8 bg-[#F8FAFC]">
+        <header className="flex justify-between items-center mb-8">
+           <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                  {view === 'DASHBOARD' ? 'Dashboard' : 
+                   view === 'RO_LIST' ? 'R&O Registry List' :
+                   view.replace(/_/g, ' ')}
+              </h2>
+              {selectedSection && <p className="text-sm text-gray-500 mt-1">Viewing as: <span className="font-bold">{selectedSection}</span></p>}
+           </div>
+           
+           <div className="flex items-center gap-2">
+                <button 
+                    onClick={fetchData}
+                    className="p-2 text-gray-500 hover:text-osmak-green hover:bg-green-50 rounded-full transition-colors"
+                    title="Refresh Data"
+                >
+                    <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                </button>
+
+               {(!isIQA || selectedSection) && (
+                 <button 
+                    onClick={() => setIsWizardOpen(true)}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition transform hover:-translate-y-0.5"
+                 >
+                    <PlusCircle size={18} /> <span className="hidden sm:inline">New Entry</span>
+                 </button>
+               )}
+           </div>
+        </header>
+
+        {loading ? (
+             <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-osmak-600" size={48} /></div>
+        ) : (
+           <>
+             {view === 'DASHBOARD' && (
+                <div className="space-y-8 animate-fadeIn">
+                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">OPEN HIGH/CRITICAL RISKS</p>
+                            <p className="text-4xl font-bold text-red-500">{highRisks.length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center text-red-400">
+                            <AlertTriangle size={20}/>
+                         </div>
+                      </div>
+                      
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">TOTAL OPEN RISKS</p>
+                            <p className="text-4xl font-bold text-gray-600">{openRisks.length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center text-orange-400">
+                            <ShieldAlert size={20}/>
+                         </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">OPEN OPPORTUNITIES</p>
+                            <p className="text-4xl font-bold text-gray-600">{openOpps.length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center text-green-500">
+                            <Lightbulb size={20}/>
+                         </div>
+                      </div>
+
+                      <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">CLOSED ITEMS</p>
+                            <p className="text-4xl font-bold text-gray-600">{contextItems.filter(i => i.status === 'CLOSED').length}</p>
+                         </div>
+                         <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400">
+                            <CheckCircle2 size={20}/>
+                         </div>
+                      </div>
+                   </div>
+
+                   {(!isIQA || selectedSection) && (() => {
+                       const upcomingRisks = openRisks
+                           .map(item => ({ item, days: getDaysRemaining(item) }))
+                           .filter(data => data.days !== null)
+                           .sort((a, b) => a.days!.days - b.days!.days)
+                           .slice(0, 4);
+
+                       if (upcomingRisks.length > 0) {
+                           return (
+                               <div className="mt-8">
+                                   <h3 className="font-bold text-gray-500 text-sm mb-4">Upcoming Deadlines</h3>
+                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                       {upcomingRisks.map(({ item, days }) => (
+                                           <div key={item.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow relative overflow-hidden" onClick={() => setSelectedItem(item)}>
+                                               <div className={`text-4xl font-bold ${days!.color} mb-1`}>{days!.days < 0 ? `+${Math.abs(days!.days)}` : days!.days}</div>
+                                               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DAYS REMAINING</div>
+                                               
+                                               <div className="mt-4 pt-4 border-t border-gray-50">
+                                                   <p className="text-sm font-medium text-gray-700 truncate mb-1" title={item.description}>{item.description}</p>
+                                                   <span className="font-mono text-[10px] text-gray-300 uppercase tracking-widest">{displayIdMap[item.id] || item.id}</span>
+                                               </div>
+                                           </div>
+                                       ))}
+                                   </div>
+                               </div>
+                           );
+                       }
+                       return null;
+                   })()}
+
+                   <div className="space-y-12">
+                       <div className="space-y-4">
+                           <div className="flex justify-between items-end mb-2">
+                               <h3 className="font-bold text-gray-500 text-sm">Open Risks</h3>
+                               <button onClick={() => exportCSV(openRisks, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                                  <Download size={14}/> CSV
+                               </button>
+                           </div>
+                           {renderTable(openRisks, true, false, 'RISK', 'max-h-[350px]')}
+                       </div>
+                       
+                       <div className="space-y-4">
+                           <div className="flex justify-between items-end mb-2">
+                               <h3 className="font-bold text-gray-500 text-sm">Open Opportunities</h3>
+                               <button onClick={() => exportCSV(openOpps, 'Open_Opps')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                                  <Download size={14}/> CSV
+                               </button>
+                           </div>
+                           {renderTable(openOpps, true, false, 'OPPORTUNITY', 'max-h-[350px]')}
+                       </div>
+                   </div>
+
+                   {isIQA && selectedSection && (
+                       <div className="mt-8 pt-8 border-t">
+                            <details className="group">
+                                <summary className="flex items-center gap-2 cursor-pointer text-gray-500 hover:text-gray-800 font-bold">
+                                    <ChevronRight className="group-open:rotate-90 transition"/> Closed Registries (Click to Expand)
+                                </summary>
+                                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-8 pl-6">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <h4 className="text-sm font-bold text-gray-500">Closed Risks</h4>
+                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), 'Closed_Risks')} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
+                                        </div>
+                                        {renderTable(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), false, true)}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <h4 className="text-sm font-bold text-gray-500">Closed Opportunities</h4>
+                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), 'Closed_Opps')} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
+                                        </div>
+                                        {renderTable(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), false, true)}
+                                    </div>
+                                </div>
+                            </details>
+                       </div>
+                   )}
+                </div>
+             )}
+
+            {view === 'RO_LIST' && (
+                <div className="space-y-4">
+                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
+                         <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><ClipboardList size={20}/> All Risks & Opportunities</h3>
+                         
+                         <div className="flex flex-wrap items-center gap-2">
+                             <select 
+                                value={listFilterYear}
+                                onChange={(e) => setListFilterYear(e.target.value)}
+                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
+                             >
+                                <option value="ALL">All Years</option>
+                                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                             </select>
+
+                             <select 
+                                value={listFilterType}
+                                onChange={(e) => setListFilterType(e.target.value as any)}
+                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
+                             >
+                                <option value="ALL">All Types</option>
+                                <option value="RISK">Risks</option>
+                                <option value="OPPORTUNITY">Opportunities</option>
+                             </select>
+
+                             <select 
+                                value={listFilterStatus}
+                                onChange={(e) => setListFilterStatus(e.target.value as any)}
+                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
+                             >
+                                <option value="ALL">All Status</option>
+                                <option value="OPEN">Open</option>
+                                <option value="CLOSED">Closed</option>
+                             </select>
+
+                             <button onClick={() => exportCSV(filteredROList, 'Filtered_Registry')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50">
+                                <Download size={16}/> Export
+                             </button>
+                        </div>
+                     </div>
+                     {renderTable(filteredROList, true, false, 'BOTH', 'max-h-[500px]')}
+                </div>
+            )}
+             {view === 'IQA_PENDING' && (
+                 <div className="space-y-4">
+                     <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg text-indigo-800 text-sm mb-4">
+                         These items require your attention for <strong>Implementation Verification</strong> or <strong>Final Verification/Closure</strong>.
+                     </div>
+                     {renderTable(pendingIQA, true)}
+                 </div>
+             )}
+             {view === 'IQA_ANALYSIS' && renderAnalysisDashboard()}
+           </>
+        )}
+      </main>
+
+      {isWizardOpen && (
+        <Wizard 
+          section={user || ''} 
+          onClose={() => setIsWizardOpen(false)} 
+          onSave={handleCreate} 
+        />
+      )}
+      
+      {selectedItem && (
+        <ItemDetailModal 
+          item={selectedItem} 
+          isIQA={isIQA}
+          currentUser={user || ''}
+          displayId={displayIdMap[selectedItem.id] || selectedItem.id}
+          onClose={() => setSelectedItem(null)}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {selectedAuditTrailItem && (
+        <AuditTrailModal 
+          trail={selectedAuditTrailItem.auditTrail} 
+          onClose={() => setSelectedAuditTrailItem(null)} 
+          itemId={displayIdMap[selectedAuditTrailItem.id] || selectedAuditTrailItem.id}
+        />
+      )}
+    </div>
+  );
 };
 
 const root = createRoot(document.getElementById('root')!);
