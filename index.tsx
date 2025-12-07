@@ -47,7 +47,8 @@ import {
   Video,
   Sparkles,
   Bot,
-  RefreshCw
+  RefreshCw,
+  Search
 } from 'lucide-react';
 
 // --- Supabase Configuration ---
@@ -1311,7 +1312,7 @@ const ItemDetailModal = ({
             {isEditing ? (
               <input 
                 type="text" 
-                className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-transparent"
+                className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-white"
                 value={editData.description}
                 onChange={e => setEditData({...editData, description: e.target.value})}
               />
@@ -1352,7 +1353,7 @@ const ItemDetailModal = ({
              <div>
                 <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Process / Function</span>
                 {isEditing ? (
-                   <input type="text" className="w-full border rounded p-1 bg-white" value={editData.process} onChange={e => setEditData({...editData, process: e.target.value})} />
+                   <input type="text" className="w-full border rounded p-1 bg-white text-gray-900" value={editData.process} onChange={e => setEditData({...editData, process: e.target.value})} />
                 ) : (
                    <span className="font-semibold text-gray-800">{item.process}</span>
                 )}
@@ -1362,7 +1363,7 @@ const ItemDetailModal = ({
                 {isEditing ? (
                    <div className="relative">
                       <select 
-                          className="w-full border rounded p-1 bg-white appearance-none"
+                          className="w-full border rounded p-1 bg-white text-gray-900 appearance-none"
                           value={SOURCES.includes(editData.source) ? editData.source : 'Others'}
                           onChange={e => {
                               if (e.target.value === 'Others') setEditData({...editData, source: ''});
@@ -1374,7 +1375,7 @@ const ItemDetailModal = ({
                       {(!SOURCES.includes(editData.source) || editData.source === '') && (
                           <input 
                               type="text" 
-                              className="w-full border rounded p-1 mt-1 bg-white" 
+                              className="w-full border rounded p-1 mt-1 bg-white text-gray-900" 
                               placeholder="Specify source..."
                               value={editData.source}
                               onChange={e => setEditData({...editData, source: e.target.value})}
@@ -1388,7 +1389,7 @@ const ItemDetailModal = ({
              <div>
                 <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Date Identified</span>
                 {isEditing ? (
-                   <input type="date" className="w-full border rounded p-1 bg-white" value={editData.dateIdentified} onChange={e => setEditData({...editData, dateIdentified: e.target.value})} />
+                   <input type="date" className="w-full border rounded p-1 bg-white text-gray-900" value={editData.dateIdentified} onChange={e => setEditData({...editData, dateIdentified: e.target.value})} />
                 ) : (
                    <span className="font-semibold text-gray-800 flex items-center gap-2">
                       <Calendar size={14} className="text-gray-400"/> {item.dateIdentified || 'N/A'}
@@ -1408,7 +1409,7 @@ const ItemDetailModal = ({
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Potential Impact on QMS</span>
                      {isEditing ? (
-                        <textarea className="w-full border rounded p-2 bg-white" value={editData.impactQMS} onChange={e => setEditData({...editData, impactQMS: e.target.value})} />
+                        <textarea className="w-full border rounded p-2 bg-white text-gray-900" value={editData.impactQMS} onChange={e => setEditData({...editData, impactQMS: e.target.value})} />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.impactQMS}</p>
                      )}
@@ -1416,7 +1417,7 @@ const ItemDetailModal = ({
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Existing Controls / Mitigation</span>
                      {isEditing ? (
-                        <textarea className="w-full border rounded p-2 bg-white" value={editData.existingControls} onChange={e => setEditData({...editData, existingControls: e.target.value})} />
+                        <textarea className="w-full border rounded p-2 bg-white text-gray-900" value={editData.existingControls} onChange={e => setEditData({...editData, existingControls: e.target.value})} />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.existingControls || 'N/A'}</p>
                      )}
@@ -1427,7 +1428,7 @@ const ItemDetailModal = ({
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Expected Benefit</span>
                      {isEditing ? (
-                        <textarea className="w-full border rounded p-2 bg-white" value={editData.expectedBenefit} onChange={e => setEditData({...editData, expectedBenefit: e.target.value})} />
+                        <textarea className="w-full border rounded p-2 bg-white text-gray-900" value={editData.expectedBenefit} onChange={e => setEditData({...editData, expectedBenefit: e.target.value})} />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.expectedBenefit}</p>
                      )}
@@ -1435,7 +1436,7 @@ const ItemDetailModal = ({
                    <div>
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Feasibility</span>
                      {isEditing ? (
-                        <select className="w-full border rounded p-2 bg-white" value={editData.feasibility} onChange={e => setEditData({...editData, feasibility: e.target.value as any})}>
+                        <select className="w-full border rounded p-2 bg-white text-gray-900" value={editData.feasibility} onChange={e => setEditData({...editData, feasibility: e.target.value as any})}>
                             <option value="LOW">Low</option>
                             <option value="MEDIUM">Medium</option>
                             <option value="HIGH">High</option>
@@ -1856,7 +1857,7 @@ const ItemDetailModal = ({
                       <div className="flex gap-2 items-center">
                           <input 
                               type="password"
-                              className="border border-red-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-red-500"
+                              className="border border-red-300 rounded px-2 py-1 text-sm bg-white text-gray-900 outline-none focus:ring-1 focus:ring-red-500"
                               placeholder="Password"
                               value={deletePassword}
                               onChange={e => { setDeletePassword(e.target.value); setDeleteError(''); }}
@@ -1875,7 +1876,7 @@ const ItemDetailModal = ({
                       <div className="flex gap-2 items-center">
                           <input 
                               type="password"
-                              className="border border-blue-300 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                              className="border border-blue-300 rounded px-2 py-1 text-sm bg-white text-gray-900 outline-none focus:ring-1 focus:ring-blue-500"
                               placeholder="Password"
                               value={reopenPassword}
                               onChange={e => { setReopenPassword(e.target.value); setReopenError(''); }}
@@ -2510,6 +2511,8 @@ const App = () => {
   const [listFilterYear, setListFilterYear] = useState<string>('ALL');
   const [listFilterStatus, setListFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [listFilterType, setListFilterType] = useState<'ALL' | 'RISK' | 'OPPORTUNITY'>('ALL');
+  
+  const [searchQuery, setSearchQuery] = useState('');
 
   const displayIdMap = useMemo(() => getDisplayIds(items), [items]);
 
@@ -2724,9 +2727,23 @@ const App = () => {
         if (listFilterStatus === 'OPEN' && item.status === 'CLOSED') return false;
         if (listFilterStatus === 'CLOSED' && item.status !== 'CLOSED') return false;
         if (listFilterType !== 'ALL' && item.type !== listFilterType) return false;
+        
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            const displayId = (displayIdMap[item.id] || item.id).toLowerCase();
+            const matchesId = displayId.includes(query);
+            const matchesDesc = item.description.toLowerCase().includes(query);
+            const matchesProcess = (item.process || '').toLowerCase().includes(query);
+            const matchesSource = (item.source || '').toLowerCase().includes(query);
+            const matchesSection = item.section.toLowerCase().includes(query);
+            const matchesLevel = (item.riskLevel || '').toLowerCase().includes(query);
+            
+            return matchesId || matchesDesc || matchesProcess || matchesSource || matchesSection || matchesLevel;
+        }
+
         return true;
     });
-  }, [contextItems, listFilterYear, listFilterStatus, listFilterType]);
+  }, [contextItems, listFilterYear, listFilterStatus, listFilterType, searchQuery, displayIdMap]);
 
   const renderTable = (data: RegistryItem[], showDays = false, isClosed = false, type: EntryType | 'BOTH' = 'RISK', maxHeight?: string) => {
     const sortedData = sortItems(data);
@@ -2758,6 +2775,11 @@ const App = () => {
               >
                   <div className="flex items-center gap-1">Date <ArrowUpDown size={14} className={sortField === 'dateIdentified' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
+              {isIQA && (
+                 <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap">
+                    Section
+                 </th>
+              )}
               <th className="px-6 py-4 w-1/3 min-w-[200px]">Description</th>
               <th 
                   className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
@@ -2781,7 +2803,7 @@ const App = () => {
           </thead>
           <tbody className="divide-y">
             {sortedData.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400 italic">No records found.</td></tr>
+                <tr><td colSpan={isIQA ? 9 : 8} className="px-6 py-8 text-center text-gray-400 italic">No records found.</td></tr>
             ) : sortedData.map(item => {
               const days = getDaysRemaining(item);
               const refId = displayIdMap[item.id] || item.id;
@@ -2794,6 +2816,11 @@ const App = () => {
                       {item.dateIdentified}
                       <div className="text-[10px] text-gray-300 mt-0.5">DATE</div>
                   </td>
+                  {isIQA && (
+                     <td onClick={() => setSelectedItem(item)} className="px-6 py-4 text-xs text-gray-600 align-top">
+                        {item.section}
+                     </td>
+                  )}
                   <td onClick={() => setSelectedItem(item)} className="px-6 py-4 font-medium text-gray-800 text-sm cursor-pointer align-top">{item.description}</td>
                   <td onClick={() => setSelectedItem(item)} className="px-6 py-4 cursor-pointer align-top">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${getPillColor(item.status)}`}>
@@ -3030,11 +3057,11 @@ const App = () => {
              <div className="flex items-center gap-2 text-osmak-green-dark font-bold mb-1"><Filter size={20}/> Date Filter</div>
              <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">From</label>
-                <input type="date" className="border rounded p-2 text-sm bg-white" value={analysisStartDate} onChange={e => setAnalysisStartDate(e.target.value)} />
+                <input type="date" className="border rounded p-2 text-sm bg-white text-gray-900" value={analysisStartDate} onChange={e => setAnalysisStartDate(e.target.value)} />
              </div>
              <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">To</label>
-                <input type="date" className="border rounded p-2 text-sm bg-white" value={analysisEndDate} onChange={e => setAnalysisEndDate(e.target.value)} />
+                <input type="date" className="border rounded p-2 text-sm bg-white text-gray-900" value={analysisEndDate} onChange={e => setAnalysisEndDate(e.target.value)} />
              </div>
           </div>
 
@@ -3161,12 +3188,14 @@ const App = () => {
 
   const handleViewChange = (newView: AppView) => {
     setView(newView);
+    setSearchQuery('');
     setIsMobileMenuOpen(false);
   };
 
   const handleSectionSelect = (s: string) => {
     setSelectedSection(s);
     setView('DASHBOARD');
+    setSearchQuery('');
     setIsMobileMenuOpen(false);
   }
 
@@ -3458,40 +3487,53 @@ const App = () => {
                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
                          <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2"><ClipboardList size={20}/> All Risks & Opportunities</h3>
                          
-                         <div className="flex flex-wrap items-center gap-2">
-                             <select 
-                                value={listFilterYear}
-                                onChange={(e) => setListFilterYear(e.target.value)}
-                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
-                             >
-                                <option value="ALL">All Years</option>
-                                {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                             </select>
+                         <div className="flex flex-col md:flex-row w-full md:w-auto gap-4">
+                             <div className="relative flex-1 min-w-[200px]">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search ID, Description, Section..." 
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none"
+                                />
+                             </div>
 
-                             <select 
-                                value={listFilterType}
-                                onChange={(e) => setListFilterType(e.target.value as any)}
-                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
-                             >
-                                <option value="ALL">All Types</option>
-                                <option value="RISK">Risks</option>
-                                <option value="OPPORTUNITY">Opportunities</option>
-                             </select>
+                             <div className="flex flex-wrap items-center gap-2">
+                                 <select 
+                                    value={listFilterYear}
+                                    onChange={(e) => setListFilterYear(e.target.value)}
+                                    className="border rounded px-2 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none"
+                                 >
+                                    <option value="ALL">All Years</option>
+                                    {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                                 </select>
 
-                             <select 
-                                value={listFilterStatus}
-                                onChange={(e) => setListFilterStatus(e.target.value as any)}
-                                className="border rounded px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-osmak-green outline-none"
-                             >
-                                <option value="ALL">All Status</option>
-                                <option value="OPEN">Open</option>
-                                <option value="CLOSED">Closed</option>
-                             </select>
+                                 <select 
+                                    value={listFilterType}
+                                    onChange={(e) => setListFilterType(e.target.value as any)}
+                                    className="border rounded px-2 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none"
+                                 >
+                                    <option value="ALL">All Types</option>
+                                    <option value="RISK">Risks</option>
+                                    <option value="OPPORTUNITY">Opportunities</option>
+                                 </select>
 
-                             <button onClick={() => exportCSV(filteredROList, 'Filtered_Registry')} className="flex items-center gap-2 bg-white border px-3 py-1 rounded shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50">
-                                <Download size={16}/> Export
-                             </button>
-                        </div>
+                                 <select 
+                                    value={listFilterStatus}
+                                    onChange={(e) => setListFilterStatus(e.target.value as any)}
+                                    className="border rounded px-2 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none"
+                                 >
+                                    <option value="ALL">All Status</option>
+                                    <option value="OPEN">Open</option>
+                                    <option value="CLOSED">Closed</option>
+                                 </select>
+
+                                 <button onClick={() => exportCSV(filteredROList, 'Filtered_Registry')} className="flex items-center gap-2 bg-white border px-3 py-2 rounded shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50">
+                                    <Download size={16}/> Export
+                                 </button>
+                            </div>
+                         </div>
                      </div>
                      {renderTable(filteredROList, true, false, 'BOTH', 'max-h-[500px]')}
                 </div>
