@@ -23,6 +23,7 @@
 | **v2.4** | [Date] | **Help Resources** | Added direct links to the User Manual and Orientation Video on the Login Screen for easier access. | IQA Head |
 | **v2.5** | [Date] | **Compliance & Verification** | Added "Overdue" visual flagging and mandatory justification logic. Enhanced IQA Verification to include detailed Implementation/Effectiveness checks before closure. | IQA Head |
 | **v2.6** | [Date] | **Terminology Update** | Renamed "Quality Assurance" / "QA" to "IQA" across the application and documentation. | IQA Head |
+| **v2.7** | [Date] | **In-App User Manual** | Integrated the User Manual as an in-app modal instead of a PDF download for better accessibility. | IQA Head |
 
 ---
 *This log controls changes made during or subsequent to the design and development of products and services.*

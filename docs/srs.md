@@ -18,7 +18,7 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
     *   Can perform **Residual Risk Assessment** when marking actions as completed.
     *   Can view a **Data Analysis** dashboard filtered to their own section's data.
     *   Access to a chronological **R&O List** with simplified reference IDs (e.g., R1, O1).
-*   **IQA Auditor (Admin):**
+*   **IQA (Admin):**
     *   Full visibility of all sections (Drill-down capability).
     *   Authority to Verify Evidence, Evaluate Effectiveness, and Close entries.
     *   Exclusive, password-protected authority to **Reopen** closed entries.

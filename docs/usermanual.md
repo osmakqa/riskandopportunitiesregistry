@@ -18,13 +18,13 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
 ### **Login Credentials**
 *   **Process Owners** (e.g., ER, Pharmacy, Nursing):
     *   **Password**: `osmak123`
-*   **IQA Auditor**:
+*   **IQA**:
     *   **Password**: `Lastname123` (e.g., `Alli123`)
 
 ### **User Support & Resources**
 Directly from the **Login Screen**, you can access the following resources:
 *   **View System Workflow**: A visual guide to the 4-step registry process.
-*   **Download User Manual**: A direct link to download this PDF guide.
+*   **View User Manual**: Access this full manual directly within the application.
 *   **Watch Orientation Video**: A video tutorial covering system basics and best practices.
 
 ### **Navigation Sidebar**
@@ -100,7 +100,7 @@ Directly from the **Login Screen**, you can access the following resources:
 
 ---
 
-## **4. Guide for IQA Auditors**
+## **4. Guide for IQA**
 
 ### **A. Reviewing & Verifying Items**
 *   Use the **"Pending Tasks"** menu to see all items requiring your attention across the hospital.
