@@ -521,18 +521,18 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">User Support & Resources</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li><strong>View System Workflow:</strong> Visual guide to the 4-step process.</li>
-                           <li><strong>View User Manual:</strong> Access this guide in-app.</li>
-                           <li><strong>Watch Orientation Video:</strong> Tutorial on basics.</li>
+                           <li><strong>View System Workflow:</strong> A visual guide to the 4-step registry process.</li>
+                           <li><strong>View User Manual:</strong> Access this full manual directly within the application.</li>
+                           <li><strong>Watch Orientation Video:</strong> A video tutorial covering system basics.</li>
                        </ul>
                    </div>
                    {/* Navigation Sidebar */}
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">Navigation Sidebar</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li><strong>Dashboard:</strong> Statistics & deadlines.</li>
-                           <li><strong>R&O List:</strong> Combined list of Risks/Opportunities.</li>
-                           <li><strong>Data Analysis:</strong> Performance metrics.</li>
+                           <li><strong>Dashboard:</strong> High-level statistics and upcoming deadlines.</li>
+                           <li><strong>R&O List:</strong> Combined chronological list of all Risks and Opportunities.</li>
+                           <li><strong>Data Analysis:</strong> Charts and performance metrics.</li>
                        </ul>
                    </div>
                </div>
@@ -550,8 +550,8 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><LayoutDashboard size={16} className="text-blue-500"/> A. Understanding the Dashboard</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li><strong>Upcoming Deadlines:</strong> Countdown cards. <span className="text-red-500 font-bold">Red</span>=Overdue, <span className="text-orange-500 font-bold">Orange</span>=Due in 7 days, <span className="text-green-500 font-bold">Green</span>=Safe.</li>
-                           <li><strong>Open Registries:</strong> Stacked tables for Open Risks and Opportunities.</li>
+                           <li><strong>Upcoming Deadlines:</strong> Countdown cards for the 4 open risks with the nearest target dates. <span className="text-red-500 font-bold">Red</span>=Overdue, <span className="text-orange-500 font-bold">Orange</span>=Due in 7 days, <span className="text-green-500 font-bold">Green</span>=Safe.</li>
+                           <li><strong>Open Registries:</strong> Stacked tables for Open Risks and Open Opportunities for easy review.</li>
                        </ul>
                    </div>
 
@@ -559,10 +559,10 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><PlusCircle size={16} className="text-green-500"/> B. Creating a New Entry</h4>
                        <ol className="list-decimal pl-5 space-y-1 text-gray-600">
-                           <li>Click <strong>"+ New Entry"</strong> top right.</li>
-                           <li>Complete the 4-step wizard.</li>
+                           <li>Click the <strong>"+ New Entry"</strong> button on the top right.</li>
+                           <li>Follow the 4-step wizard to input all required details.</li>
                            <li><strong>Action Plans are MANDATORY</strong> for ALL Risks and Opportunities.</li>
-                           <li>Submission starts the <strong>IMPLEMENTATION</strong> phase.</li>
+                           <li>Upon submission, the entry immediately enters the <strong>IMPLEMENTATION</strong> phase.</li>
                        </ol>
                    </div>
 
@@ -570,26 +570,30 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><ListFilter size={16} className="text-purple-500"/> C. Viewing and Sorting Lists</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Navigate to <strong>R&O List</strong> for a chronological view (R1, O1, etc.).</li>
-                           <li>Use filters for Year, Status (Open/Closed), or Type.</li>
-                           <li>Click headers to sort by Date, Status, or Level.</li>
+                           <li>Navigate to <strong>R&O List</strong> for a combined chronological view (e.g., R1, R2, O1).</li>
+                           <li>Use filters for Year, Status (Open/Closed), or Type (Risk/Opportunity).</li>
+                           <li>Click headers like <strong>"Date"</strong>, <strong>"Status"</strong>, or <strong>"Level"</strong> to sort the list.</li>
                        </ul>
                    </div>
 
                    {/* D. Editing */}
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Pencil size={16} className="text-yellow-500"/> D. Editing an Entry</h4>
-                       <p className="text-gray-600 pl-5">Edit details during the <strong>IMPLEMENTATION</strong> phase using the Pencil icon in the detail view.</p>
+                       <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                           <li>You can edit an entry while in the <strong>IMPLEMENTATION</strong> phase.</li>
+                           <li>Open the entry, click the <strong>Pencil Icon</strong> (Edit) in the top-right corner.</li>
+                           <li>Modify details (including re-scoring risks) and click the <strong>Save Icon</strong>.</li>
+                       </ul>
                    </div>
 
                    {/* E. Implementation */}
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><Activity size={16} className="text-indigo-500"/> E. Implementation & Evidence</h4>
                        <ol className="list-decimal pl-5 space-y-1 text-gray-600">
-                           <li>Scroll to <strong>Action Plans</strong> in the entry.</li>
-                           <li>Click <strong>"Completed"</strong> on an action.</li>
-                           <li><strong>Risks:</strong> Adjust <strong>Residual Risk</strong> sliders in the panel.</li>
-                           <li><strong>Opportunities:</strong> Mark as completed.</li>
+                           <li>Once submitted, status is <strong>IMPLEMENTATION</strong>. Execute your action plans.</li>
+                           <li>Open the entry and scroll to <strong>Action Plans</strong>.</li>
+                           <li><strong>For Risks:</strong> Click the <strong>"Completed"</strong> button. A <strong>Residual Risk Assessment</strong> panel will appear. Adjust the sliders based on the result. The system automatically calculates the new Level.</li>
+                           <li><strong>For Opportunities:</strong> Click "Completed".</li>
                            <li>Add <strong>Completion Remarks</strong> (optional) and click "Submit for Verification".</li>
                        </ol>
                    </div>
@@ -598,8 +602,9 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><AlertTriangle size={16} className="text-red-500"/> F. Handling Overdue Items</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Overdue items show a <span className="text-red-500 font-bold">RED DATE</span>.</li>
-                           <li>System requires a mandatory <strong>Reason for Delay</strong> when marking as complete.</li>
+                           <li>If a Target Date has passed, it appears in <span className="text-red-500 font-bold">RED</span> with an <strong>"OVERDUE"</strong> badge.</li>
+                           <li>When marking as "Completed", the system requires a mandatory <strong>Reason for Delay</strong>.</li>
+                           <li>You cannot submit without providing this justification.</li>
                        </ul>
                    </div>
 
@@ -607,22 +612,27 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><ShieldAlert size={16} className="text-teal-500"/> G. IQA Verification Process</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Action status becomes <strong>FOR VERIFICATION</strong>.</li>
+                           <li>Submitted actions become <strong>FOR VERIFICATION</strong>.</li>
                            <li>When all actions are done, entry status becomes <strong>IQA VERIFICATION</strong>.</li>
-                           <li>IQA Decision: <strong>Verified</strong> (Closed) or <strong>Rejected</strong> (Back to Implementation).</li>
+                           <li>IQA Decision:
+                                <ul className="list-[circle] pl-5 mt-1 space-y-1 text-xs">
+                                    <li><strong>Verified:</strong> Entry is <strong>CLOSED</strong>.</li>
+                                    <li><strong>Rejected:</strong> Reverts to <strong>IMPLEMENTATION</strong>. Review remarks and re-submit.</li>
+                                </ul>
+                           </li>
                        </ul>
                    </div>
 
                    {/* H. Audit Trail */}
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><History size={16} className="text-gray-500"/> H. Viewing Audit Trail</h4>
-                       <p className="text-gray-600 pl-5">Click the <strong>History (clock) icon</strong> in any list row to view the timeline of events.</p>
+                       <p className="text-gray-600 pl-5">Click the <strong>History (clock) icon</strong> in any list row to view the timeline of who created, edited, approved, or closed the entry.</p>
                    </div>
                    
                    {/* I. Data Analysis */}
                    <div>
-                       <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><BarChart3 size={16} className="text-blue-600"/> I. Data Analysis</h4>
-                       <p className="text-gray-600 pl-5">View charts for Status Overview, Risk Level Distribution, Annual Volume, and Sources via the sidebar menu.</p>
+                       <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2"><BarChart3 size={16} className="text-blue-600"/> I. Data Analysis (Your Section)</h4>
+                       <p className="text-gray-600 pl-5">Navigate to <strong>Data Analysis</strong>. View charts for Status Overview, Risk Level Distribution, Annual Volume, and Sources filtered to your section.</p>
                    </div>
                </div>
             </section>
@@ -644,9 +654,20 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                            <li><strong>Final Verification & Closure:</strong>
                                 <ul className="list-[circle] pl-5 mt-1 space-y-1 text-xs">
                                     <li>Once all actions are completed, status becomes <strong>IQA VERIFICATION</strong>.</li>
-                                    <li>Review <strong>Residual Risk Assessment</strong> and evidence.</li>
-                                    <li>Fill Verification Form: Implementation (Yes/No), Effectiveness (Yes/No), Remarks.</li>
-                                    <li><strong>Outcome:</strong> Verify & Close (Status: CLOSED) or Reject (Status: IMPLEMENTATION).</li>
+                                    <li>Review user's <strong>Residual Risk Assessment</strong> and evidence.</li>
+                                    <li>Fill Verification Form:
+                                        <ul className="list-disc pl-4 mt-1">
+                                            <li><strong>Implementation:</strong> Select "Implemented" or "Not Implemented".</li>
+                                            <li><strong>Effectiveness:</strong> Select "Effective" or "Not Effective".</li>
+                                            <li><strong>Remarks:</strong> Add mandatory verification notes.</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Outcome:</strong>
+                                        <ul className="list-disc pl-4 mt-1">
+                                            <li><strong>Verify & Close:</strong> Marks entry as <strong>CLOSED</strong>.</li>
+                                            <li><strong>Reject:</strong> Reverts entry to <strong>IMPLEMENTATION</strong>.</li>
+                                        </ul>
+                                    </li>
                                 </ul>
                            </li>
                        </ul>
@@ -656,20 +677,21 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">B. Viewing Section Registries</h4>
                        <ol className="list-decimal pl-5 space-y-1 text-gray-600">
-                           <li>Click <strong>"Hospital Sections"</strong> dropdown in sidebar.</li>
-                           <li>Select a section to view their Dashboard as if logged in as them.</li>
-                           <li>Click <strong>"Exit Section View"</strong> to return.</li>
+                           <li>From sidebar, click <strong>"Hospital Sections"</strong> dropdown.</li>
+                           <li>Select a section to view their Dashboard and List as if logged in as them.</li>
+                           <li>Click <strong>"Exit Section View"</strong> to return to global dashboard.</li>
                        </ol>
                    </div>
 
                    {/* C. Reopening */}
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">C. Reopening a Closed Entry</h4>
-                       <p className="text-gray-600 mb-2 text-xs italic">Exclusive to IQA for corrections or recurring risks.</p>
+                       <p className="text-gray-600 mb-2 text-xs italic">This function is <strong>exclusive to IQA</strong> and is used for correction of records or reactivating recurring risks.</p>
                        <ol className="list-decimal pl-5 space-y-1 text-gray-600">
-                           <li>Open a <strong>CLOSED</strong> entry.</li>
-                           <li>Click <strong>"Reopen Entry"</strong> button at the bottom.</li>
-                           <li>Enter password to confirm. Status reverts to <strong>IMPLEMENTATION</strong>.</li>
+                           <li>Open any entry with a <strong>CLOSED</strong> status.</li>
+                           <li>At the bottom, click the <strong>"Reopen Entry"</strong> button (next to Delete).</li>
+                           <li>A confirmation dialog will appear. Enter your password to confirm.</li>
+                           <li>The entry's status will revert to <strong>IMPLEMENTATION</strong> and the action will be logged in the Audit Trail.</li>
                        </ol>
                    </div>
 
@@ -678,9 +700,9 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                        <h4 className="font-bold text-gray-800 mb-2">D. Data Analysis (Hospital-Wide)</h4>
                        <ol className="list-decimal pl-5 space-y-1 text-gray-600">
                            <li>Navigate to <strong>Data Analysis</strong> menu.</li>
-                           <li>Set <strong>From</strong> and <strong>To</strong> date filters.</li>
-                           <li>View KPIs (Total vs Active vs Closed) for Risks/Opportunities.</li>
-                           <li>Monitor departmental performance via "Closed Risks by Section" chart.</li>
+                           <li>Set the <strong>From</strong> and <strong>To</strong> dates to filter the dataset.</li>
+                           <li>View KPIs (Total vs Active vs Closed) for both Risks and Opportunities.</li>
+                           <li>The bar chart shows "Closed Risks by Section" to monitor departmental performance.</li>
                        </ol>
                    </div>
                </div>
