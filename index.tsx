@@ -678,7 +678,7 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">A. Reviewing & Verifying Items</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring attention.</li>
+                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring your attention.</li>
                            <li><strong>Action Plan Verification:</strong> Verify individual plans or return for revision.</li>
                            <li><strong>Final Verification & Closure:</strong>
                                 <ul className="list-[circle] pl-5 mt-1 space-y-1 text-xs">
@@ -2105,7 +2105,14 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
      setIsSuggesting(true);
      setSuggestions([]);
      try {
-         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const apiKey = process.env.API_KEY;
+         if (!apiKey) {
+            alert("Configuration Error: API Key is missing in this environment.");
+            setIsSuggesting(false);
+            return;
+         }
+
+         const ai = new GoogleGenAI({ apiKey });
          const prompt = `Generate 3 specific, professional, and distinct examples of a ${data.type} description for the hospital process: "${data.process}". 
          Focus on ISO 9001:2015 compliance.
          Return the response as a JSON array of strings.`;
@@ -2139,10 +2146,16 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
      setIsGeneratingPlans(true);
      setSuggestedPlans([]);
      try {
-         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+         const apiKey = process.env.API_KEY;
+         if (!apiKey) {
+            alert("Configuration Error: API Key is missing in this environment.");
+            setIsGeneratingPlans(false);
+            return;
+         }
+
+         const ai = new GoogleGenAI({ apiKey });
          const prompt = `Generate 3 specific action plans for a hospital risk registry based on this description: "${data.description}" and type "${data.type}". 
          Return JSON format. 
-         The targetDate should be 2 weeks from today (${new Date().toISOString().split('T')[0]}).
          The strategy must be one of: ${Object.keys(strategies).join(', ')}.`;
 
          const response = await ai.models.generateContent({
@@ -2157,9 +2170,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                          properties: {
                              strategy: { type: Type.STRING },
                              description: { type: Type.STRING },
-                             evidence: { type: Type.STRING },
-                             responsiblePerson: { type: Type.STRING },
-                             targetDate: { type: Type.STRING }
+                             evidence: { type: Type.STRING }
                          }
                      }
                  }
@@ -2416,13 +2427,12 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                                    <div 
                                        key={i}
                                        onClick={() => {
-                                           setNewPlan({
+                                           setNewPlan(prev => ({
+                                               ...prev,
                                                strategy: plan.strategy || '',
                                                description: plan.description || '',
                                                evidence: plan.evidence || '',
-                                               responsiblePerson: plan.responsiblePerson || '',
-                                               targetDate: plan.targetDate || ''
-                                           });
+                                           }));
                                        }}
                                        className="bg-white p-3 rounded border border-purple-100 cursor-pointer hover:border-purple-400 hover:shadow-md transition group"
                                    >
@@ -2431,10 +2441,6 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                                            <span className="text-xs text-purple-400 group-hover:text-purple-600 font-bold">Apply & Edit →</span>
                                        </div>
                                        <p className="text-sm font-medium text-gray-800 mt-1">{plan.description}</p>
-                                       <div className="mt-2 flex gap-4 text-xs text-gray-500">
-                                           <span>Ref: {plan.responsiblePerson}</span>
-                                           <span>Due: {plan.targetDate}</span>
-                                       </div>
                                    </div>
                                ))}
                            </div>
