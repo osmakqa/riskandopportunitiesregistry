@@ -2035,8 +2035,10 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
     dateIdentified: new Date().toISOString().split('T')[0]
   });
   
-  const [isRefining, setIsRefining] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isGeneratingPlans, setIsGeneratingPlans] = useState(false);
+  const [suggestedPlans, setSuggestedPlans] = useState<any[]>([]);
 
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
 
@@ -2095,34 +2097,47 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
     }));
   };
 
-  const handleRefineDescription = async () => {
-     if (!data.description?.trim()) return;
-     setIsRefining(true);
+  const handleSuggestDescription = async () => {
+     if (!data.process) {
+         alert("Please enter a Process / Function first.");
+         return;
+     }
+     setIsSuggesting(true);
+     setSuggestions([]);
      try {
          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-         const prompt = `Rewrite the following text into a formal, professional, ISO 9001 compliant description for a hospital Risk & Opportunities Registry. Keep it concise but specific. Avoid first-person phrasing.
-         
-         Context: "${data.description}"`;
-         
+         const prompt = `Generate 3 specific, professional, and distinct examples of a ${data.type} description for the hospital process: "${data.process}". 
+         Focus on ISO 9001:2015 compliance.
+         Return the response as a JSON array of strings.`;
+
          const response = await ai.models.generateContent({
              model: 'gemini-2.5-flash',
-             contents: prompt
+             contents: prompt,
+             config: {
+                 responseMimeType: 'application/json',
+                 responseSchema: {
+                     type: Type.ARRAY,
+                     items: { type: Type.STRING }
+                 }
+             }
          });
          
-         const refinedText = response.text.trim();
-         const cleanText = refinedText.replace(/^"|"$/g, '');
-         setData(prev => ({ ...prev, description: cleanText }));
+         const ideas = JSON.parse(response.text.trim());
+         if (Array.isArray(ideas)) {
+             setSuggestions(ideas);
+         }
      } catch (e) {
-         console.error("AI Refine Error:", e);
-         alert("Failed to refine description. Please check your internet connection.");
+         console.error("AI Suggest Error:", e);
+         alert("Failed to generate suggestions. Please try again.");
      } finally {
-         setIsRefining(false);
+         setIsSuggesting(false);
      }
   };
 
   const handleGenerateActionPlans = async () => {
      if (!data.description) return;
      setIsGeneratingPlans(true);
+     setSuggestedPlans([]);
      try {
          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
          const prompt = `Generate 3 specific action plans for a hospital risk registry based on this description: "${data.description}" and type "${data.type}". 
@@ -2153,19 +2168,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
          
          const plans = JSON.parse(response.text.trim());
          if (Array.isArray(plans)) {
-             const newPlans: ActionPlan[] = plans.map((p: any) => ({
-                 id: `AP-${Date.now()}-${Math.random()}`,
-                 strategy: p.strategy,
-                 description: p.description,
-                 evidence: p.evidence,
-                 responsiblePerson: p.responsiblePerson,
-                 targetDate: p.targetDate,
-                 status: 'APPROVED'
-             }));
-             setData(prev => ({
-                 ...prev,
-                 actionPlans: [...(prev.actionPlans || []), ...newPlans]
-             }));
+             setSuggestedPlans(plans);
          }
      } catch (e) {
          console.error("AI Action Plan Error:", e);
@@ -2256,14 +2259,28 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                 <div className="flex justify-between items-center mb-1">
                     <label className="block text-xs font-bold text-gray-500 uppercase">Description</label>
                     <button 
-                        onClick={handleRefineDescription}
-                        disabled={!data.description || isRefining}
+                        onClick={handleSuggestDescription}
+                        disabled={!data.process || isSuggesting}
                         className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 disabled:opacity-50 transition"
                     >
-                        {isRefining ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} 
-                        Refine with AI
+                        {isSuggesting ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} 
+                        Suggest {data.type === 'RISK' ? 'Risks' : 'Opportunities'}
                     </button>
                 </div>
+                {suggestions.length > 0 && (
+                    <div className="mb-2 space-y-2 bg-indigo-50 p-3 rounded border border-indigo-100 animate-fadeIn">
+                        <p className="text-xs font-bold text-indigo-800">Suggestions (Click to apply):</p>
+                        {suggestions.map((s, i) => (
+                            <button 
+                                key={i}
+                                onClick={() => { setData({...data, description: s}); setSuggestions([]); }}
+                                className="block w-full text-left text-xs p-2 bg-white border border-indigo-200 rounded hover:bg-indigo-600 hover:text-white transition"
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.description || ''} onChange={e => setData({...data, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
               </div>
             </div>
@@ -2378,6 +2395,52 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
 
                <div className="border rounded-lg p-4 bg-gray-50">
                   <h4 className="font-bold text-sm text-gray-700 mb-3">Add Action Plan</h4>
+
+                  {/* Suggestions Area */}
+                   {suggestedPlans.length > 0 && (
+                       <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 animate-fadeIn mb-4">
+                           <div className="flex justify-between items-center mb-3">
+                               <h4 className="text-sm font-bold text-purple-900 flex items-center gap-2">
+                                   <Sparkles size={16}/> Suggested Plans
+                               </h4>
+                               <button 
+                                   onClick={() => setSuggestedPlans([])}
+                                   className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                               >
+                                   <XCircle size={14}/> Dismiss
+                               </button>
+                           </div>
+                           <p className="text-xs text-purple-700 mb-3">Click on a plan to populate the editor below.</p>
+                           <div className="space-y-2">
+                               {suggestedPlans.map((plan, i) => (
+                                   <div 
+                                       key={i}
+                                       onClick={() => {
+                                           setNewPlan({
+                                               strategy: plan.strategy || '',
+                                               description: plan.description || '',
+                                               evidence: plan.evidence || '',
+                                               responsiblePerson: plan.responsiblePerson || '',
+                                               targetDate: plan.targetDate || ''
+                                           });
+                                       }}
+                                       className="bg-white p-3 rounded border border-purple-100 cursor-pointer hover:border-purple-400 hover:shadow-md transition group"
+                                   >
+                                       <div className="flex justify-between">
+                                           <span className="text-[10px] font-bold uppercase bg-purple-100 text-purple-800 px-2 py-0.5 rounded">{plan.strategy}</span>
+                                           <span className="text-xs text-purple-400 group-hover:text-purple-600 font-bold">Apply & Edit →</span>
+                                       </div>
+                                       <p className="text-sm font-medium text-gray-800 mt-1">{plan.description}</p>
+                                       <div className="mt-2 flex gap-4 text-xs text-gray-500">
+                                           <span>Ref: {plan.responsiblePerson}</span>
+                                           <span>Due: {plan.targetDate}</span>
+                                       </div>
+                                   </div>
+                               ))}
+                           </div>
+                       </div>
+                   )}
+
                   <div className="space-y-3">
                      <div>
                         <select 
