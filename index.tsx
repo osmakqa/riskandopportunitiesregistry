@@ -217,6 +217,7 @@ const mapFromDb = (dbItem: any): RegistryItem => {
 const SECTIONS = [
   'Admitting Section',
   'Ambulatory Care Medicine Complex',
+  'Billing Section',
   'Cardiovascular Diagnostics',
   'Cashier Management',
   'Claims',
