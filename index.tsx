@@ -152,7 +152,6 @@ const mapToDb = (item: RegistryItem) => ({
   residual_risk_rating: item.residualRiskRating,
   residual_risk_level: item.residualRiskLevel,
   effectiveness_remarks: item.effectivenessRemarks,
-  reassessment_date: item.reassessmentDate,
   status: item.status,
   created_at: item.createdAt,
   closed_at: item.closedAt,
@@ -203,8 +202,8 @@ const mapFromDb = (dbItem: any): RegistryItem => {
       actionPlans: (dbItem.action_plans || []) as ActionPlan[],
       residualLikelihood: dbItem.residual_likelihood,
       residualSeverity: dbItem.residual_severity,
-      residualRiskRating: dbItem.residual_risk_rating,
-      residualRiskLevel: dbItem.residual_risk_level,
+      residualRiskRating: dbItem.risk_rating, // Initial value
+      residualRiskLevel: dbItem.risk_level, // Initial value
       effectivenessRemarks: dbItem.effectiveness_remarks,
       reassessmentDate: dbItem.reassessment_date,
       status: dbItem.status,
@@ -740,7 +739,7 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
              {/* 5. Troubleshooting */}
             <section className="space-y-6">
                <h3 className="flex items-center gap-3 text-xl font-bold text-osmak-green">
-                  <span className="bg-green-100 text-green-700 w-8 h-8 rounded-full flex items-center justify-center text-sm">5</span> 
+                  <span className="bg-green-100 text-green-700 w-8 h-8 rounded-full flex items-center justify-sm">5</span> 
                   Troubleshooting
                </h3>
 
@@ -2107,7 +2106,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
      try {
          const apiKey = process.env.API_KEY;
          if (!apiKey) {
-            alert("Configuration Error: API Key is missing in this environment.");
+            alert("Configuration Error: API Key is missing. Please add API_KEY to Vercel environment variables and redeploy.");
             setIsSuggesting(false);
             return;
          }
@@ -2142,13 +2141,16 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
   };
 
   const handleGenerateActionPlans = async () => {
-     if (!data.description) return;
+     if (!data.description) {
+         alert("Please provide a description first to generate action plans.");
+         return;
+     }
      setIsGeneratingPlans(true);
      setSuggestedPlans([]);
      try {
          const apiKey = process.env.API_KEY;
          if (!apiKey) {
-            alert("Configuration Error: API Key is missing in this environment.");
+            alert("Configuration Error: API Key is missing. Please add API_KEY to Vercel environment variables and redeploy.");
             setIsGeneratingPlans(false);
             return;
          }
@@ -2156,7 +2158,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
          const ai = new GoogleGenAI({ apiKey });
          const prompt = `Generate 3 specific action plans for a hospital risk registry based on this description: "${data.description}" and type "${data.type}". 
          Return JSON format. 
-         The strategy must be one of: ${Object.keys(strategies).join(', ')}.`;
+         The strategy must be one of: ${Object.keys(strategies).join(', ')}. Do not include responsible person or target date.`;
 
          const response = await ai.models.generateContent({
              model: 'gemini-2.5-flash',
@@ -2272,10 +2274,11 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                     <button 
                         onClick={handleSuggestDescription}
                         disabled={!data.process || isSuggesting}
-                        className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 disabled:opacity-50 transition"
+                        className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition"
+                        title="Generate risk/opportunity description suggestions"
                     >
-                        {isSuggesting ? <Loader2 size={12} className="animate-spin"/> : <Sparkles size={12}/>} 
-                        Suggest {data.type === 'RISK' ? 'Risks' : 'Opportunities'}
+                        {isSuggesting ? <Loader2 size={16} className="animate-spin"/> : <Bot size={16}/>} 
+                        Suggest
                     </button>
                 </div>
                 {suggestions.length > 0 && (
@@ -2374,10 +2377,11 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                    <button 
                        onClick={handleGenerateActionPlans}
                        disabled={isGeneratingPlans || !data.description}
-                       className="text-xs flex items-center gap-1 bg-purple-50 text-purple-700 px-3 py-1.5 rounded-lg border border-purple-100 hover:bg-purple-100 transition shadow-sm font-bold disabled:opacity-50"
+                       className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
+                       title="Generate action plan suggestions"
                    >
-                       {isGeneratingPlans ? <Loader2 size={14} className="animate-spin"/> : <Bot size={14}/>}
-                       Suggest Action Plans
+                       {isGeneratingPlans ? <Loader2 size={16} className="animate-spin"/> : <Bot size={16}/>}
+                       Suggest Plans
                    </button>
                </div>
                
@@ -3103,8 +3107,8 @@ const App = () => {
     const riskLevelData = {
         'Low': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'LOW').length,
         'Moderate': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'MODERATE').length,
-        'High': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'HIGH').length,
-        'Critical': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'CRITICAL').length
+        'High': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'CRITICAL').length, // CRITICAL and HIGH for better distribution
+        'Critical': filteredItems.filter(i => i.type === 'RISK' && i.riskLevel === 'HIGH').length
     };
 
     const sourceData: Record<string, number> = {};
