@@ -677,8 +677,8 @@ const UserManualModal = ({ onClose }: { onClose: () => void }) => (
                    <div>
                        <h4 className="font-bold text-gray-800 mb-2">A. Reviewing & Verifying Items</h4>
                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring your attention.</li>
-                           <li><strong>Action Plan Verification:</strong> Verify individual plans or return for revision.</li>
+                           <li>Use <strong>"Pending Tasks"</strong> menu to see all items requiring your attention across the hospital.</li>
+                           <li><strong>Action Plan Verification:</strong> You can verify individual action plans or return them for revision.</li>
                            <li><strong>Final Verification & Closure:</strong>
                                 <ul className="list-[circle] pl-5 mt-1 space-y-1 text-xs">
                                     <li>Once all actions are completed, status becomes <strong>IQA VERIFICATION</strong>.</li>
@@ -2255,7 +2255,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                     >
                         {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <ChevronDown className="absolute right-3 top-3 text-gray-400 pointer-events-none" size={16} />
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
                 </div>
                 {(!SOURCES.includes(data.source || '') || data.source === '') && (
                     <input 
@@ -2274,7 +2274,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
                     <button 
                         onClick={handleSuggestDescription}
                         disabled={!data.process || isSuggesting}
-                        className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition"
+                        className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
                         title="Generate risk/opportunity description suggestions"
                     >
                         {isSuggesting ? <Loader2 size={16} className="animate-spin"/> : <Bot size={16}/>} 
@@ -2542,7 +2542,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
 }
 
 const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => (
-  <header className="md:hidden sticky top-0 z-50 bg-osmak-green text-white p-4 shadow-md flex justify-between items-center">
+  <header className="md:hidden sticky top-0 left-0 right-0 h-16 bg-[#009a3e] flex items-center justify-between px-4 z-40 shadow-md">
     <div className="flex items-center gap-3">
       <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="Logo" className="h-10 w-10 object-contain" />
       <div>
@@ -2707,7 +2707,28 @@ const App = () => {
 
   const exportCSV = (data: RegistryItem[], filename: string) => {
     const headers = [
-        'Ref #','Process/Function','Source','Description of Risk','Type (Risk or Opportunity)','Potential Impact on QMS','Likelihood','Severity','Risk Rating','Risk Level','Existing Controls/Mitigation','Action Plan','Responsible Person','Target Completion Date','Verification/Evidence','Status (Open or Closed)','Date of Re-Assessment','Residual Likelihood','Residual Severity','Residual Risk Rating','Residual Risk Level','Remarks on Effectiveness'
+        'No.',
+        'Process / Function',
+        'Source',
+        'Type (Risk / Opportunity)',
+        'Description of Risk / Opportunity',
+        'Potential Impact on QMS',
+        'Likelihood (1–5)',
+        'Severity (1–5)',
+        'Risk Rating (L×S)',
+        'Risk Level',
+        'Existing Controls / Mitigation',
+        'Actions Plan (describe the action)',
+        'Responsible Person',
+        'Target Date',
+        'Verification / Evidence',
+        'Status (Open/Closed)',
+        'Date of Re-Assessment',
+        'Residual Likelihood (1–5)',
+        'Residual Severity (1–5)',
+        'Residual Risk Rating (L×S)',
+        'Residual Risk Level',
+        'Remarks on Effectiveness'
     ];
 
     const formatCell = (value: any) => {
@@ -2721,13 +2742,34 @@ const App = () => {
     };
 
     const rows = data.map(item => {
-        const actionPlansDesc = item.actionPlans.map(p => p.description).join('; ');
+        const actionPlansCombinedDesc = item.actionPlans.map(p => `${p.strategy}: ${p.description}`).join('; ');
         const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
         const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
         const evidences = item.actionPlans.map(p => p.evidence).join('; ');
 
         const rowData = [
-            displayIdMap[item.id] || item.id, item.process, item.source, item.description, item.type, item.impactQMS, item.likelihood, item.severity, item.riskRating, item.riskLevel, item.existingControls, actionPlansDesc, responsiblePersons, targetDates, evidences, item.status === 'CLOSED' ? 'Closed' : 'Open', item.reassessmentDate, item.residualLikelihood, item.residualSeverity, item.residualRiskRating, item.residualRiskLevel, item.effectivenessRemarks
+            displayIdMap[item.id] || item.id,
+            item.process,
+            item.source,
+            item.type,
+            item.description,
+            item.type === 'RISK' ? item.impactQMS : '', // Potential Impact on QMS
+            item.likelihood,
+            item.severity,
+            item.riskRating,
+            item.riskLevel,
+            item.existingControls,
+            actionPlansCombinedDesc,
+            responsiblePersons,
+            targetDates,
+            evidences,
+            item.status === 'CLOSED' ? 'Closed' : 'Open',
+            item.reassessmentDate,
+            item.residualLikelihood,
+            item.residualSeverity,
+            item.residualRiskRating,
+            item.residualRiskLevel,
+            item.effectivenessRemarks
         ];
         
         return rowData.map(val => formatCell(val || '')).join(',');
