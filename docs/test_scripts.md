@@ -24,6 +24,7 @@
 | **TC-015** | **Overdue Logic** | Attempt to mark an Overdue action plan as Completed without entering a Reason. | System prevents submission and prompts for "Reason for Delay". | Blocked | **PASS** |
 | **TC-016** | **IQA Rejection** | IQA marks verification as "Not Effective". | System reverts status to "IMPLEMENTATION" and saves remarks. | Reverted | **PASS** |
 | **TC-017** | **IQA Closure** | IQA marks verification as "Implemented" and "Effective". | System updates status to "CLOSED" and saves remarks. | Closed | **PASS** |
+| **TC-018** | **AI Suggestions** | In Wizard, click "Suggest" for Description. | System generates 3 relevant options. User selects one, field populates. | Populated | **PASS** |
 
 ---
 **Overall Test Result:**  

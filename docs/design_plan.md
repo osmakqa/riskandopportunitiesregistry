@@ -24,6 +24,7 @@ To transition from decentralized spreadsheet-based risk assessments to a central
 ### Phase 3: Development / Coding
 *   **Activity:** Frontend development using ReactJS and TailwindCSS (OsMak Branding).
 *   **Activity:** Implementation of "Edit Mode," a comprehensive **Audit Trail**, and **Data Analysis** dashboards for both IQA (global) and Section (local) users.
+*   **Activity:** Integration of **Google Gemini API** to provide AI-powered suggestions for risk descriptions, assessments, and action plans.
 *   **Activity:** Implementation of **Chronological Reference IDs** and **Residual Risk Reassessment** workflow.
 *   **Optimization:** Removal of "Plan Review" step to streamline workflow (v2.2).
 *   **Enhancement:** Implementation of **Overdue Item Logic** (Visual flags, mandatory justification) and **Enhanced IQA Verification** (Effectiveness checks).

@@ -57,13 +57,17 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// --- Google Sheets Backup Configuration ---
+// TODO: Deploy the Google Apps Script and paste the Web App URL here
+const GOOGLE_SHEET_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCjGXypU6bVgG8YtpvQTEAmiiY5ylvmTgyJ2NU-lXp0WXTtDkKhHKRfdKlsHf3Wl4/exec'; 
+
 // --- Types & Interfaces ---
 
 type EntryType = 'RISK' | 'OPPORTUNITY';
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 // Renamed QA_VERIFICATION to IQA_VERIFICATION
 type WorkflowStatus = 'IMPLEMENTATION' | 'REASSESSMENT' | 'IQA_VERIFICATION' | 'CLOSED';
-type ActionStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
+type ActionStatus = 'PENDING_APPROVAL' | 'FOR_IMPLEMENTATION' | 'REVISION_REQUIRED' | 'FOR_VERIFICATION' | 'COMPLETED';
 
 interface AuditEvent {
   timestamp: string;
@@ -157,6 +161,39 @@ const mapToDb = (item: RegistryItem) => ({
   closed_at: item.closedAt,
   audit_trail: item.auditTrail
 });
+
+// --- Backup Helper ---
+const backupToGoogleSheets = async (item: RegistryItem) => {
+  if (!GOOGLE_SHEET_SCRIPT_URL) {
+    console.warn("Google Sheet Backup Skipped: No Script URL Configured");
+    return;
+  }
+  
+  const dbItem = mapToDb(item);
+  
+  // Ensure array/object fields are strictly stringified for the payload
+  // The GAS script should parse the main JSON body, but individual object fields
+  // are best sent as their DB representation or stringified to ensure they fit in cells.
+  const payload = {
+    ...dbItem,
+    action_plans: JSON.stringify(dbItem.action_plans),
+    audit_trail: JSON.stringify(dbItem.audit_trail)
+  };
+
+  try {
+    await fetch(GOOGLE_SHEET_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors', // 'no-cors' is required for simple requests to GAS Web Apps without preflight issues
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    console.log("Backup sent to Google Sheets");
+  } catch (e) {
+    console.error("Google Sheets Backup Failed", e);
+  }
+};
 
 const mapFromDb = (dbItem: any): RegistryItem => {
   let trail: AuditEvent[] = [];
@@ -336,6 +373,16 @@ const getPillColor = (status: WorkflowStatus) => {
       default: return 'bg-gray-100 text-gray-800';
     }
 };
+
+const getActionPillColor = (status: ActionStatus) => {
+  switch (status) {
+    case 'FOR_IMPLEMENTATION': return 'bg-blue-100 text-blue-800';
+    case 'COMPLETED': return 'bg-green-100 text-green-800';
+    case 'FOR_VERIFICATION': return 'bg-purple-100 text-purple-800';
+    case 'REVISION_REQUIRED': return 'bg-red-100 text-red-800';
+    default: return 'bg-gray-100 text-gray-800';
+  }
+}
 
 const getLevelPillColor = (level?: RiskLevel) => {
     switch (level) {
@@ -987,7 +1034,7 @@ const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   return (
     <div className="min-h-screen bg-[#F0FFF4] flex items-center justify-center p-4">
       {showWorkflow && <WorkflowModal onClose={() => setShowWorkflow(false)} />}
-      {showManual && <UserManualModal onClose={() => setShowManual(false)} />}
+      {showManual && <UserManualModal onClose={() => setShowWorkflow(false)} />}
       
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" />
@@ -1248,7 +1295,7 @@ const ItemDetailModal = ({
     const action: ActionPlan = {
       id: `AP-${Date.now()}`,
       ...newPlan,
-      status: 'APPROVED'
+      status: 'FOR_IMPLEMENTATION'
     };
     const updatedItem = addAuditEvent(item, `Action Plan Added: ${newPlan.description}`, currentUser);
     onUpdate({
@@ -1590,13 +1637,9 @@ const ItemDetailModal = ({
                             {overdue && <span className="block text-[10px] text-red-500">(Overdue)</span>}
                         </td>
                         <td className="px-4 py-3 align-top pt-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            ap.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                            ap.status === 'APPROVED' ? 'bg-blue-100 text-blue-800' :
-                            ap.status === 'REVISION_REQUIRED' ? 'bg-red-100 text-red-800' :
-                            ap.status === 'FOR_VERIFICATION' ? 'bg-purple-100 text-purple-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>{ap.status === 'FOR_VERIFICATION' ? 'FOR VERIFICATION' : ap.status.replace('_', ' ')}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-bold ${getActionPillColor(ap.status)}`}>
+                            {ap.status === 'FOR_VERIFICATION' ? 'FOR VERIFICATION' : ap.status.replace('_', ' ')}
+                          </span>
                           {overdue && <span className="ml-2 px-1.5 py-0.5 bg-red-600 text-white text-[10px] rounded font-bold">OVERDUE</span>}
                         </td>
                         <td className="px-4 py-3 text-right align-top pt-4">
@@ -1620,7 +1663,7 @@ const ItemDetailModal = ({
                                   </button>
                                 </>
                               )}
-                              {item.status === 'IMPLEMENTATION' && ap.status === 'APPROVED' && (
+                              {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_IMPLEMENTATION' && (
                                 <span className="text-xs text-gray-400 italic">Waiting for user...</span>
                               )}
                             </div>
@@ -1631,7 +1674,7 @@ const ItemDetailModal = ({
                                   <Trash2 size={16} />
                                 </button>
                               )}
-                              {item.status === 'IMPLEMENTATION' && (ap.status === 'APPROVED' || ap.status === 'REVISION_REQUIRED') && !completingActionId && (
+                              {item.status === 'IMPLEMENTATION' && (ap.status === 'FOR_IMPLEMENTATION' || ap.status === 'REVISION_REQUIRED') && !completingActionId && (
                                 <button 
                                     onClick={() => {
                                         setCompletingActionId(ap.id);
@@ -2030,12 +2073,21 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
   const [data, setData] = useState<Partial<RegistryItem>>({
     section,
     type: 'RISK',
+    source: 'Process Review', // Default to 'Process Review'
     actionPlans: [],
     dateIdentified: new Date().toISOString().split('T')[0]
   });
   
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const [isSuggestingImpact, setIsSuggestingImpact] = useState(false); // New state for Impact AI
+  const [impactSuggestions, setImpactSuggestions] = useState<string[]>([]); // New state for Impact suggestions
+
+  const [isSuggestingBenefit, setIsSuggestingBenefit] = useState(false); // New state for Benefit AI
+  const [benefitSuggestions, setBenefitSuggestions] = useState<string[]>([]); // New state for Benefit suggestions
+
+
   const [isGeneratingPlans, setIsGeneratingPlans] = useState(false);
   const [suggestedPlans, setSuggestedPlans] = useState<any[]>([]);
 
@@ -2073,7 +2125,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
       actionPlans: [...(prev.actionPlans || []), { 
         id: `AP-${Date.now()}`, 
         ...newPlan, 
-        status: 'APPROVED'
+        status: 'FOR_IMPLEMENTATION'
       }]
     }));
     setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
@@ -2097,8 +2149,8 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
   };
 
   const handleSuggestDescription = async () => {
-     if (!data.process) {
-         alert("Please enter a Process / Function first.");
+     if (!data.process || !data.section) {
+         alert("Please enter a Process / Function and ensure the Section is set first.");
          return;
      }
      setIsSuggesting(true);
@@ -2112,8 +2164,7 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
          }
 
          const ai = new GoogleGenAI({ apiKey });
-         const prompt = `Generate 3 specific, professional, and distinct examples of a ${data.type} description for the hospital process: "${data.process}". 
-         Focus on ISO 9001:2015 compliance.
+         const prompt = `For a hospital process "${data.process}" in the "${data.section}" section, generate 3 specific and professional descriptions for a ${data.type.toLowerCase()}. These descriptions should clearly define the ${data.type.toLowerCase()} itself, focusing on its nature and context within the process, but *without* including any potential impacts on QMS or expected benefits. Focus on ISO 9001:2015 compliance.
          Return the response as a JSON array of strings.`;
 
          const response = await ai.models.generateContent({
@@ -2139,6 +2190,95 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
          setIsSuggesting(false);
      }
   };
+
+  const handleSuggestImpact = async () => {
+    if (!data.description) {
+      alert("Please enter a Risk Description first to generate potential impacts.");
+      return;
+    }
+    setIsSuggestingImpact(true);
+    setImpactSuggestions([]);
+    try {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        alert("Configuration Error: API Key is missing. Please add API_KEY to Vercel environment variables and redeploy.");
+        setIsSuggestingImpact(false);
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate 3 potential impacts on a Quality Management System (QMS) for the following risk description: '${data.description}'. 
+      Focus on aspects relevant to ISO 9001:2015 (e.g., non-conformity, customer satisfaction, process efficiency, compliance, financial, reputational).
+      Return the response as a JSON array of strings.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          }
+        }
+      });
+      
+      const impacts = JSON.parse(response.text.trim());
+      if (Array.isArray(impacts)) {
+        setImpactSuggestions(impacts);
+      }
+    } catch (e) {
+      console.error("AI Impact Suggest Error:", e);
+      alert("Failed to generate impact suggestions. Please try again.");
+    } finally {
+      setIsSuggestingImpact(false);
+    }
+  };
+
+  const handleSuggestBenefit = async () => {
+    if (!data.description) {
+      alert("Please enter an Opportunity Description first to generate expected benefits.");
+      return;
+    }
+    setIsSuggestingBenefit(true);
+    setBenefitSuggestions([]);
+    try {
+      const apiKey = process.env.API_KEY;
+      if (!apiKey) {
+        alert("Configuration Error: API Key is missing. Please add API_KEY to Vercel environment variables and redeploy.");
+        setIsSuggestingBenefit(false);
+        return;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate 3 potential expected benefits or positive outcomes for the following opportunity description: '${data.description}'. 
+      Focus on aspects relevant to a hospital's Quality Management System (QMS) (e.g., improved patient care, cost savings, efficiency gains, staff morale, innovation, compliance).
+      Return the response as a JSON array of strings.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          }
+        }
+      });
+      
+      const benefits = JSON.parse(response.text.trim());
+      if (Array.isArray(benefits)) {
+        setBenefitSuggestions(benefits);
+      }
+    } catch (e) {
+      console.error("AI Benefit Suggest Error:", e);
+      alert("Failed to generate benefit suggestions. Please try again.");
+    } finally {
+      setIsSuggestingBenefit(false);
+    }
+  };
+
 
   const handleGenerateActionPlans = async () => {
      if (!data.description) {
@@ -2240,6 +2380,12 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Process / Function</label>
                 <input type="text" className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" value={data.process || ''} onChange={e => setData({...data, process: e.target.value})} placeholder="e.g. Document Control" />
+                <div className="mt-2 text-xs text-gray-500 flex items-start gap-2 bg-gray-50 p-2 rounded border border-gray-200">
+                    <Info size={14} className="mt-0.5 text-gray-400 shrink-0"/>
+                    <span>
+                        e.g., Patient Admission, Medication Dispensing, Supply Chain Management.
+                    </span>
+                </div>
               </div>
 
               <div>
@@ -2304,7 +2450,32 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
             <div className="space-y-6 animate-fadeIn">
               <h3 className="font-bold text-lg text-gray-800">2. Risk Assessment</h3>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Potential Impact on QMS</label>
+                <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase">Potential Impact on QMS</label>
+                    <button 
+                        onClick={handleSuggestImpact}
+                        disabled={!data.description || isSuggestingImpact}
+                        className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
+                        title="Generate potential QMS impact suggestions"
+                    >
+                        {isSuggestingImpact ? <Loader2 size={16} className="animate-spin"/> : <Bot size={16}/>} 
+                        Suggest
+                    </button>
+                </div>
+                {impactSuggestions.length > 0 && (
+                    <div className="mb-2 space-y-2 bg-indigo-50 p-3 rounded border border-indigo-100 animate-fadeIn">
+                        <p className="text-xs font-bold text-indigo-800">Suggestions (Click to apply):</p>
+                        {impactSuggestions.map((s, i) => (
+                            <button 
+                                key={i}
+                                onClick={() => { setData({...data, impactQMS: s}); setImpactSuggestions([]); }}
+                                className="block w-full text-left text-xs p-2 bg-white border border-indigo-200 rounded hover:bg-indigo-600 hover:text-white transition"
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <textarea className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" value={data.impactQMS || ''} onChange={e => setData({...data, impactQMS: e.target.value})} />
               </div>
               
@@ -2348,6 +2519,12 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Existing Controls</label>
                 <textarea className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" value={data.existingControls || ''} onChange={e => setData({...data, existingControls: e.target.value})} placeholder="What is currently in place?" />
+                <div className="mt-2 text-xs text-gray-500 flex items-start gap-2 bg-gray-50 p-2 rounded border border-gray-200">
+                    <Info size={14} className="mt-0.5 text-gray-400 shrink-0"/>
+                    <span>
+                        Examples: Standard Operating Procedures (SOPs), Staff Training, Equipment Maintenance, Regular Audits, Quality Checks, Insurance, Contingency Plans.
+                    </span>
+                </div>
               </div>
             </div>
           )}
@@ -2356,7 +2533,32 @@ const Wizard = ({ section, onClose, onSave }: { section: string, onClose: () => 
             <div className="space-y-6 animate-fadeIn">
               <h3 className="font-bold text-lg text-gray-800">2. Opportunity Assessment</h3>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expected Benefit</label>
+                <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase">Expected Benefit</label>
+                    <button 
+                        onClick={handleSuggestBenefit}
+                        disabled={!data.description || isSuggestingBenefit}
+                        className="flex items-center gap-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition shadow-sm"
+                        title="Generate expected benefit suggestions"
+                    >
+                        {isSuggestingBenefit ? <Loader2 size={16} className="animate-spin"/> : <Bot size={16}/>} 
+                        Suggest
+                    </button>
+                </div>
+                {benefitSuggestions.length > 0 && (
+                    <div className="mb-2 space-y-2 bg-indigo-50 p-3 rounded border border-indigo-100 animate-fadeIn">
+                        <p className="text-xs font-bold text-indigo-800">Suggestions (Click to apply):</p>
+                        {benefitSuggestions.map((s, i) => (
+                            <button 
+                                key={i}
+                                onClick={() => { setData({...data, expectedBenefit: s}); setBenefitSuggestions([]); }}
+                                className="block w-full text-left text-xs p-2 bg-white border border-indigo-200 rounded hover:bg-indigo-600 hover:text-white transition"
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.expectedBenefit || ''} onChange={e => setData({...data, expectedBenefit: e.target.value})} />
               </div>
               <div>
@@ -2675,6 +2877,8 @@ const App = () => {
         if (error) throw error;
         setItems(prev => [item, ...prev]);
         setIsWizardOpen(false);
+        // Backup to Google Sheets
+        backupToGoogleSheets(item);
     } catch (err) {
         alert("Failed to save to database. Please check connection.");
         console.error(err);
@@ -2687,6 +2891,8 @@ const App = () => {
         if (error) throw error;
         setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
         setSelectedItem(updatedItem);
+        // Backup to Google Sheets
+        backupToGoogleSheets(updatedItem);
     } catch (err) {
         alert("Update failed.");
         console.error(err);
@@ -3103,7 +3309,7 @@ const App = () => {
                                               className={`rounded flex items-center justify-center text-sm transition hover:opacity-100 cursor-default ${getCellColor(likelihood, severity, count)}`}
                                               title={`L:${likelihood} x S:${severity} = ${likelihood * severity}`}
                                           >
-                                              {count > 0 ? count : ''}
+                                              {count > 0 && count}
                                           </div>
                                       );
                                   })}

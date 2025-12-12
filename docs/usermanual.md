@@ -6,6 +6,7 @@ The **OsMak Risk & Opportunities Registry System** is a digital platform designe
 ### **Core Features**
 *   **Role-Based Access**: Distinct views for Hospital Sections and Internal Quality Audit (IQA).
 *   **Automated Scoring**: Real-time calculation of Risk Ratings (Likelihood × Severity).
+*   **AI Assistance**: Integrated AI tools to suggest descriptions, impacts, and action plans.
 *   **Guided Workflow**: Submission → Implementation → Verification → Closure.
 *   **Data Analysis**: Real-time charts and KPI tracking for both IQA and Section users.
 *   **Audit Trail**: Complete history of every action taken on an entry.
@@ -46,8 +47,9 @@ Directly from the **Login Screen**, you can access the following resources:
 ### **B. Creating a New Entry**
 1.  Click the **"+ New Entry"** button on the top right.
 2.  Follow the 4-step wizard to input all required details.
-3.  **Action Plans** are **MANDATORY** for **ALL** Risks (regardless of rating) and all Opportunities. You cannot submit an entry without at least one action plan.
-4.  Upon submission, the entry immediately enters the **Implementation** phase.
+3.  **AI Assistance**: Use the **"Suggest"** button (Robot Icon) to automatically generate descriptions, potential impacts/benefits, and recommended action plans.
+4.  **Action Plans** are **MANDATORY** for **ALL** Risks (regardless of rating) and all Opportunities. You cannot submit an entry without at least one action plan.
+5.  Upon submission, the entry immediately enters the **Implementation** phase.
 
 ### **C. Viewing and Sorting Lists**
 *   Navigate to the **R&O List** to see a combined view sorted chronologically by Reference ID (e.g., R1, R2, O1).

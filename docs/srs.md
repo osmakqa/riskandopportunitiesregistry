@@ -60,6 +60,14 @@ This document defines the requirements for the Digital Risk & Opportunities Regi
 *   **Deletion/Reopening:** These critical actions require password confirmation.
 *   **Numbering:** System must generate chronological, human-readable Reference IDs (R1, R2, O1...) based on creation date.
 
+### 2.6 AI Integration
+*   **Generative AI**: The system shall utilize the Google Gemini API to assist users in drafting entries.
+*   **Suggestions**: Users can request AI suggestions for:
+    *   Risk/Opportunity Descriptions based on Process and Section.
+    *   Potential Impacts on QMS (for Risks) or Expected Benefits (for Opportunities).
+    *   Action Plan strategies, descriptions, and evidence.
+*   **User Control**: AI output must be selectable and editable by the user; it does not auto-populate without user confirmation.
+
 ---
 **Verified By:** _________________________ (Project Lead)  
 **Date:** _________________________
