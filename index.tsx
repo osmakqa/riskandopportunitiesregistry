@@ -1,30 +1,32 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { 
   PlusCircle, 
-  RefreshCw,
-  Search,
-  AlertTriangle,
-  ShieldAlert,
-  Lightbulb,
-  CheckCircle2,
-  ClipboardList,
-  Download,
-  ChevronRight,
-  Loader2
+  RefreshCw, 
+  Loader2,
+  Menu,
+  X
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
-import { RegistryItem, AuditEvent, AppView } from './lib/types';
+import { RegistryItem, AuditEvent, EntryType } from './lib/types';
+import { mapFromDb, mapToDb, backupToGoogleSheets, calculateRiskLevel, getDisplayIds } from './lib/utils';
 import { SECTIONS, IQA_USERS } from './lib/constants';
-import { mapToDb, mapFromDb, getDisplayIds, calculateRiskLevel, getDaysRemaining, exportCSV } from './lib/utils';
-import { Login } from './components/Auth/Login';
-import { MobileHeader } from './components/Layout/MobileHeader';
-import { Sidebar } from './components/Layout/Sidebar';
-import { Wizard } from './components/Registry/Wizard';
-import { ItemDetailModal } from './components/Registry/ItemDetailModal';
-import { AuditTrailModal } from './components/Modals/AuditTrailModal';
-import { RegistryTable } from './components/Registry/RegistryTable';
-import { AnalysisDashboard } from './components/Dashboard/AnalysisDashboard';
+
+import Login from './components/Auth/Login';
+import Sidebar from './components/Layout/Sidebar';
+import MobileHeader from './components/Layout/MobileHeader';
+import RegistryTable from './components/Registry/RegistryTable';
+import AnalysisDashboard from './components/Dashboard/AnalysisDashboard';
+import Wizard from './components/Registry/Wizard';
+import ItemDetailModal from './components/Registry/ItemDetailModal';
+import AuditTrailModal from './components/Modals/AuditTrailModal';
+
+// Charts and cards
+import { ShieldAlert, Lightbulb, CheckCircle2, AlertTriangle, Download, Search, Layers, BarChart3, ClipboardList, ChevronRight, Building2, ChevronDown, ChevronUp } from 'lucide-react';
+import { getDaysRemaining } from './lib/utils';
+
+type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS';
 
 const App = () => {
   const [user, setUser] = useState<string | null>(null);
@@ -36,9 +38,16 @@ const App = () => {
   const [selectedAuditTrailItem, setSelectedAuditTrailItem] = useState<RegistryItem | null>(null);
   const [dbConnected, setDbConnected] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isSectionsOpen, setIsSectionsOpen] = useState(false);
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
+  const [sortField, setSortField] = useState<'dateIdentified' | 'riskLevel' | 'status' | 'createdAt'>('dateIdentified');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  const [analysisStartDate, setAnalysisStartDate] = useState(new Date().getFullYear() + '-01-01');
+  const [analysisEndDate, setAnalysisEndDate] = useState(new Date().getFullYear() + '-12-31');
+
   const [listFilterYear, setListFilterYear] = useState<string>('ALL');
   const [listFilterStatus, setListFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [listFilterType, setListFilterType] = useState<'ALL' | 'RISK' | 'OPPORTUNITY'>('ALL');
@@ -132,6 +141,8 @@ const App = () => {
         if (error) throw error;
         setItems(prev => [item, ...prev]);
         setIsWizardOpen(false);
+        // Backup to Google Sheets
+        backupToGoogleSheets(item);
     } catch (err) {
         alert("Failed to save to database. Please check connection.");
         console.error(err);
@@ -144,6 +155,8 @@ const App = () => {
         if (error) throw error;
         setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
         setSelectedItem(updatedItem);
+        // Backup to Google Sheets
+        backupToGoogleSheets(updatedItem);
     } catch (err) {
         alert("Update failed.");
         console.error(err);
@@ -162,18 +175,95 @@ const App = () => {
       }
   }
 
-  const handleViewChange = (newView: AppView) => {
-    setView(newView);
-    setSearchQuery('');
-    setIsMobileMenuOpen(false);
+  const exportCSV = (data: RegistryItem[], filename: string) => {
+    const headers = [
+        'No.',
+        'Process / Function',
+        'Source',
+        'Type (Risk / Opportunity)',
+        'Description of Risk / Opportunity',
+        'Potential Impact on QMS',
+        'Likelihood (1–5)',
+        'Severity (1–5)',
+        'Risk Rating (L×S)',
+        'Risk Level',
+        'Existing Controls / Mitigation',
+        'Actions Plan (describe the action)',
+        'Responsible Person',
+        'Target Date',
+        'Verification / Evidence',
+        'Status (Open/Closed)',
+        'Date of Re-Assessment',
+        'Residual Likelihood (1–5)',
+        'Residual Severity (1–5)',
+        'Residual Risk Rating (L×S)',
+        'Residual Risk Level',
+        'Remarks on Effectiveness'
+    ];
+
+    const formatCell = (value: any) => {
+        if (value === null || value === undefined) return '""';
+        const stringValue = String(value);
+        const escapedValue = stringValue.replace(/"/g, '""');
+        if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+             return `"${escapedValue}"`;
+        }
+        return stringValue;
+    };
+
+    const rows = data.map(item => {
+        const actionPlansCombinedDesc = item.actionPlans.map(p => `${p.strategy}: ${p.description}`).join('; ');
+        const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
+        const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
+        const evidences = item.actionPlans.map(p => p.evidence).join('; ');
+
+        const rowData = [
+            displayIdMap[item.id] || item.id,
+            item.process,
+            item.source,
+            item.type,
+            item.description,
+            item.type === 'RISK' ? item.impactQMS : '', // Potential Impact on QMS
+            item.likelihood,
+            item.severity,
+            item.riskRating,
+            item.riskLevel,
+            item.existingControls,
+            actionPlansCombinedDesc,
+            responsiblePersons,
+            targetDates,
+            evidences,
+            item.status === 'CLOSED' ? 'Closed' : 'Open',
+            item.reassessmentDate,
+            item.residualLikelihood,
+            item.residualSeverity,
+            item.residualRiskRating,
+            item.residualRiskLevel,
+            item.effectivenessRemarks
+        ];
+        
+        return rowData.map(val => formatCell(val || '')).join(',');
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${filename}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const handleSectionSelect = (s: string | null) => {
-    setSelectedSection(s);
-    setView('DASHBOARD');
-    setSearchQuery('');
-    setIsMobileMenuOpen(false);
-  }
+
+  const handleSort = (field: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt') => {
+      if (sortField === field) {
+          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      } else {
+          setSortField(field);
+          setSortDirection('desc');
+      }
+  };
 
   const isIQA = IQA_USERS.includes(user || '');
   const activeSection = isIQA && selectedSection ? selectedSection : user;
@@ -219,8 +309,8 @@ const App = () => {
   if (!user) return <Login onLogin={setUser} />;
 
   return (
-    <div className="flex min-h-screen bg-gray-100 font-sans text-gray-900">
-      <MobileHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
+    <div className="flex min-h-screen bg-[#F0FFF4] font-sans text-gray-900">
+      <MobileHeader onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} />
 
       {isMobileMenuOpen && (
         <div 
@@ -230,19 +320,22 @@ const App = () => {
       )}
 
       <Sidebar 
-        user={user}
-        isIQA={isIQA}
-        selectedSection={selectedSection}
-        isMobileMenuOpen={isMobileMenuOpen}
-        onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
-        onViewChange={handleViewChange}
-        onSectionSelect={handleSectionSelect}
-        onLogout={() => setUser(null)}
-        currentView={view}
-        pendingCount={pendingIQA.length}
+          user={user}
+          isIQA={isIQA}
+          selectedSection={selectedSection}
+          view={view}
+          isMobileMenuOpen={isMobileMenuOpen}
+          isSectionsOpen={isSectionsOpen}
+          pendingCount={pendingIQA.length}
+          onCloseMobile={() => setIsMobileMenuOpen(false)}
+          onExitSection={() => { setSelectedSection(null); setView('DASHBOARD'); }}
+          onViewChange={(v) => { setView(v); setSearchQuery(''); setIsMobileMenuOpen(false); }}
+          onSectionSelect={(s) => { setSelectedSection(s); setView('DASHBOARD'); setSearchQuery(''); setIsMobileMenuOpen(false); }}
+          onToggleSections={() => setIsSectionsOpen(!isSectionsOpen)}
+          onLogout={() => setUser(null)}
       />
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pt-20 md:pt-8 bg-[#F8FAFC]">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pt-20 md:pt-8 bg-[#F0FFF4]">
         <header className="flex justify-between items-center mb-8">
            <div>
               <h2 className="text-2xl font-bold text-gray-900">
@@ -273,7 +366,7 @@ const App = () => {
            </div>
         </header>
 
-        {loading && items.length === 0 ? (
+        {loading ? (
              <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin text-osmak-600" size={48} /></div>
         ) : (
            <>
@@ -355,42 +448,50 @@ const App = () => {
                        <div className="space-y-4">
                            <div className="flex justify-between items-end mb-2">
                                <h3 className="font-bold text-gray-500 text-sm">Open Risks</h3>
-                               <button onClick={() => exportCSV(openRisks, 'Open_Risks', displayIdMap)} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                               <button onClick={() => exportCSV(openRisks, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
                                   <Download size={14}/> CSV
                                </button>
                            </div>
                            <RegistryTable 
-                              data={openRisks} 
-                              displayIdMap={displayIdMap} 
-                              isIQA={isIQA} 
-                              onSelectItem={setSelectedItem}
-                              onViewAuditTrail={setSelectedAuditTrailItem}
-                              showDays={true}
-                              isClosed={false}
-                              type="RISK"
-                              maxHeight="max-h-[350px]"
-                              view="DASHBOARD"
+                                data={openRisks} 
+                                showDays={true} 
+                                isClosed={false} 
+                                type="RISK" 
+                                maxHeight="max-h-[350px]"
+                                isIQA={isIQA}
+                                displayIdMap={displayIdMap}
+                                view={view}
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                                onSort={handleSort}
+                                onSelectItem={setSelectedItem}
+                                onSelectAuditTrail={setSelectedAuditTrailItem}
+                                onExport={exportCSV}
                            />
                        </div>
                        
                        <div className="space-y-4">
                            <div className="flex justify-between items-end mb-2">
                                <h3 className="font-bold text-gray-500 text-sm">Open Opportunities</h3>
-                               <button onClick={() => exportCSV(openOpps, 'Open_Opps', displayIdMap)} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+                               <button onClick={() => exportCSV(openOpps, 'Open_Opps')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
                                   <Download size={14}/> CSV
                                </button>
                            </div>
                            <RegistryTable 
-                              data={openOpps} 
-                              displayIdMap={displayIdMap} 
-                              isIQA={isIQA} 
-                              onSelectItem={setSelectedItem}
-                              onViewAuditTrail={setSelectedAuditTrailItem}
-                              showDays={true}
-                              isClosed={false}
-                              type="OPPORTUNITY"
-                              maxHeight="max-h-[350px]"
-                              view="DASHBOARD"
+                                data={openOpps} 
+                                showDays={true} 
+                                isClosed={false} 
+                                type="OPPORTUNITY" 
+                                maxHeight="max-h-[350px]"
+                                isIQA={isIQA}
+                                displayIdMap={displayIdMap}
+                                view={view}
+                                sortField={sortField}
+                                sortDirection={sortDirection}
+                                onSort={handleSort}
+                                onSelectItem={setSelectedItem}
+                                onSelectAuditTrail={setSelectedAuditTrailItem}
+                                onExport={exportCSV}
                            />
                        </div>
                    </div>
@@ -405,33 +506,39 @@ const App = () => {
                                     <div className="space-y-2">
                                         <div className="flex justify-between">
                                             <h4 className="text-sm font-bold text-gray-500">Closed Risks</h4>
-                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), 'Closed_Risks', displayIdMap)} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
+                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED'), 'Closed_Risks')} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
                                         </div>
                                         <RegistryTable 
                                             data={contextItems.filter(i => i.type === 'RISK' && i.status === 'CLOSED')} 
-                                            displayIdMap={displayIdMap} 
-                                            isIQA={isIQA} 
-                                            onSelectItem={setSelectedItem}
-                                            onViewAuditTrail={setSelectedAuditTrailItem}
                                             isClosed={true}
-                                            type="RISK"
-                                            view="DASHBOARD"
+                                            isIQA={isIQA}
+                                            displayIdMap={displayIdMap}
+                                            view={view}
+                                            sortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={handleSort}
+                                            onSelectItem={setSelectedItem}
+                                            onSelectAuditTrail={setSelectedAuditTrailItem}
+                                            onExport={exportCSV}
                                         />
                                     </div>
                                     <div className="space-y-2">
                                         <div className="flex justify-between">
                                             <h4 className="text-sm font-bold text-gray-500">Closed Opportunities</h4>
-                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), 'Closed_Opps', displayIdMap)} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
+                                            <button onClick={() => exportCSV(contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED'), 'Closed_Opps')} className="text-xs font-bold text-gray-500 hover:underline">CSV</button>
                                         </div>
                                         <RegistryTable 
                                             data={contextItems.filter(i => i.type === 'OPPORTUNITY' && i.status === 'CLOSED')} 
-                                            displayIdMap={displayIdMap} 
-                                            isIQA={isIQA} 
-                                            onSelectItem={setSelectedItem}
-                                            onViewAuditTrail={setSelectedAuditTrailItem}
                                             isClosed={true}
-                                            type="OPPORTUNITY"
-                                            view="DASHBOARD"
+                                            isIQA={isIQA}
+                                            displayIdMap={displayIdMap}
+                                            view={view}
+                                            sortField={sortField}
+                                            sortDirection={sortDirection}
+                                            onSort={handleSort}
+                                            onSelectItem={setSelectedItem}
+                                            onSelectAuditTrail={setSelectedAuditTrailItem}
+                                            onExport={exportCSV}
                                         />
                                     </div>
                                 </div>
@@ -488,7 +595,7 @@ const App = () => {
                                     <option value="CLOSED">Closed</option>
                                  </select>
 
-                                 <button onClick={() => exportCSV(filteredROList, 'Filtered_Registry', displayIdMap)} className="flex items-center gap-2 bg-white border px-3 py-2 rounded shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50">
+                                 <button onClick={() => exportCSV(filteredROList, 'Filtered_Registry')} className="flex items-center gap-2 bg-white border px-3 py-2 rounded shadow-sm text-sm font-bold text-gray-600 hover:bg-gray-50">
                                     <Download size={16}/> Export
                                  </button>
                             </div>
@@ -496,16 +603,20 @@ const App = () => {
                      </div>
                      <RegistryTable 
                         data={filteredROList} 
-                        displayIdMap={displayIdMap} 
-                        isIQA={isIQA} 
-                        onSelectItem={setSelectedItem}
-                        onViewAuditTrail={setSelectedAuditTrailItem}
-                        showDays={true}
-                        isClosed={false}
-                        type="BOTH"
+                        showDays={true} 
+                        isClosed={false} 
+                        type="BOTH" 
                         maxHeight="max-h-[500px]"
-                        view="RO_LIST"
-                    />
+                        isIQA={isIQA}
+                        displayIdMap={displayIdMap}
+                        view={view}
+                        sortField={sortField}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                        onSelectItem={setSelectedItem}
+                        onSelectAuditTrail={setSelectedAuditTrailItem}
+                        onExport={exportCSV}
+                     />
                 </div>
             )}
              {view === 'IQA_PENDING' && (
@@ -515,22 +626,29 @@ const App = () => {
                      </div>
                      <RegistryTable 
                         data={pendingIQA} 
-                        displayIdMap={displayIdMap} 
-                        isIQA={isIQA} 
-                        onSelectItem={setSelectedItem}
-                        onViewAuditTrail={setSelectedAuditTrailItem}
                         showDays={true}
-                        isClosed={false}
-                        view="IQA_PENDING"
-                    />
+                        isIQA={isIQA}
+                        displayIdMap={displayIdMap}
+                        view={view}
+                        sortField={sortField}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                        onSelectItem={setSelectedItem}
+                        onSelectAuditTrail={setSelectedAuditTrailItem}
+                        onExport={exportCSV}
+                     />
                  </div>
              )}
              {view === 'IQA_ANALYSIS' && (
-                <AnalysisDashboard 
-                    items={items} 
-                    isIQA={isIQA} 
-                    selectedSection={selectedSection} 
-                />
+                 <AnalysisDashboard 
+                    items={items}
+                    isIQA={isIQA}
+                    selectedSection={selectedSection}
+                    startDate={analysisStartDate}
+                    endDate={analysisEndDate}
+                    onStartDateChange={setAnalysisStartDate}
+                    onEndDateChange={setAnalysisEndDate}
+                 />
              )}
            </>
         )}

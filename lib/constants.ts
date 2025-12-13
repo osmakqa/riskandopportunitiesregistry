@@ -1,6 +1,8 @@
 
-export const SUPABASE_URL = 'https://jtohqxhfinqjspihturh.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0b2hxeGhmaW5xanNwaWh0dXJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQyNTkzNDgsImV4cCI6MjA3OTgzNTM0OH0.-XZbu74I7OtJ11tEnSUfgegGaWH0aGF0hyEXpqLJoV0';
+import { RiskLevel } from './types';
+
+// TODO: Deploy the Google Apps Script and paste the Web App URL here
+export const GOOGLE_SHEET_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwCjGXypU6bVgG8YtpvQTEAmiiY5ylvmTgyJ2NU-lXp0WXTtDkKhHKRfdKlsHf3Wl4/exec'; 
 
 export const SECTIONS = [
   'Admitting Section',
@@ -48,6 +50,7 @@ export const IQA_USERS = [
 ];
 
 export const CREDENTIALS: Record<string, string> = {
+  // IQA Accounts
   'Main IQA Account': 'admin123',
   'Ana Concepcion Biligan': 'Biligan123',
   'Bernadette Babanto': 'Babanto123',
@@ -64,6 +67,7 @@ export const CREDENTIALS: Record<string, string> = {
   'Ruth Sagales': 'Sagales123',
   'Sharalyn Dasigan': 'Dasigan123',
   'Teodorico Frigillana': 'Frigillana123',
+  // Default Section Password
   'DEFAULT': 'osmak123' 
 };
 

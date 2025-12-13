@@ -3,7 +3,7 @@ import React from 'react';
 import { Activity } from 'lucide-react';
 import { RegistryItem } from '../../lib/types';
 
-export const RiskHeatmap = ({ items }: { items: RegistryItem[] }) => {
+const RiskHeatmap = ({ items }: { items: RegistryItem[] }) => {
     const matrix = Array(5).fill(0).map(() => Array(5).fill(0));
     
     items.filter(i => i.type === 'RISK').forEach(item => {
@@ -66,3 +66,5 @@ export const RiskHeatmap = ({ items }: { items: RegistryItem[] }) => {
         </div>
     )
 }
+
+export default RiskHeatmap;

@@ -66,5 +66,3 @@ export interface DonutChartProps {
   data: Record<string, number>;
   colors: Record<string, string>;
 }
-
-export type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS';

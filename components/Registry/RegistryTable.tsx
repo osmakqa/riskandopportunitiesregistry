@@ -1,52 +1,39 @@
 
-import React, { useState } from 'react';
-import { ArrowUpDown, RotateCcw, Download, ChevronRight } from 'lucide-react';
+import React from 'react';
+import { Download, ArrowUpDown, RotateCcw, ChevronRight } from 'lucide-react';
 import { RegistryItem, EntryType } from '../../lib/types';
-import { getPillColor, formatStatus, getLevelPillColor, getDaysRemaining, exportCSV } from '../../lib/utils';
+import { getDaysRemaining, formatStatus, getPillColor, getLevelPillColor } from '../../lib/utils';
 
 interface RegistryTableProps {
   data: RegistryItem[];
-  displayIdMap: Record<string, string>;
-  isIQA: boolean;
-  onSelectItem: (item: RegistryItem) => void;
-  onViewAuditTrail: (item: RegistryItem) => void;
   showDays?: boolean;
   isClosed?: boolean;
   type?: EntryType | 'BOTH';
   maxHeight?: string;
-  view?: string;
+  isIQA: boolean;
+  displayIdMap: Record<string, string>;
+  view: string;
+  sortField: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt';
+  sortDirection: 'asc' | 'desc';
+  onSort: (field: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt') => void;
+  onSelectItem: (item: RegistryItem) => void;
+  onSelectAuditTrail: (item: RegistryItem) => void;
+  onExport: (data: RegistryItem[], filename: string) => void;
 }
 
-export const RegistryTable = ({ 
-  data, 
-  displayIdMap, 
-  isIQA, 
-  onSelectItem, 
-  onViewAuditTrail,
-  showDays = false, 
-  isClosed = false, 
-  type = 'RISK', 
-  maxHeight,
-  view = 'DASHBOARD'
+const RegistryTable = ({ 
+    data, showDays = false, isClosed = false, type = 'RISK', maxHeight, 
+    isIQA, displayIdMap, view, sortField, sortDirection, 
+    onSort, onSelectItem, onSelectAuditTrail, onExport 
 }: RegistryTableProps) => {
-    const [sortField, setSortField] = useState<'dateIdentified' | 'riskLevel' | 'status' | 'createdAt'>('dateIdentified');
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-
-    const handleSort = (field: 'dateIdentified' | 'riskLevel' | 'status' | 'createdAt') => {
-        if (sortField === field) {
-            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortField(field);
-            setSortDirection('desc');
-        }
-    };
-  
+    
+    // Sort logic handled in parent or here, assuming data passed is already filtered but maybe not sorted
     const sortedData = [...data].sort((a, b) => {
         let valA: any = a[sortField];
         let valB: any = b[sortField];
         
         if (sortField === 'riskLevel') {
-            const levels = { 'LOW': 1, 'MODERATE': 2, 'HIGH': 3, 'CRITICAL': 4 };
+            const levels: any = { 'LOW': 1, 'MODERATE': 2, 'HIGH': 3, 'CRITICAL': 4 };
             valA = levels[a.riskLevel || 'LOW'] || 0;
             valB = levels[b.riskLevel || 'LOW'] || 0;
         }
@@ -60,13 +47,13 @@ export const RegistryTable = ({
         if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
         return 0;
     });
-    
+
     return (
     <div className={`bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col`}>
       {view === 'DASHBOARD' && !isClosed && type === 'RISK' && (
           <div className="flex justify-between items-center px-6 py-4 bg-gray-50 border-b shrink-0">
               <h3 className="font-bold text-gray-700">Open Risks</h3>
-              <button onClick={() => exportCSV(data, 'Open_Risks', displayIdMap)} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
+              <button onClick={() => onExport(data, 'Open_Risks')} className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline">
                   <Download size={14}/> CSV
               </button>
           </div>
@@ -78,13 +65,13 @@ export const RegistryTable = ({
             <tr>
               <th 
                 className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
-                onClick={() => handleSort('createdAt')}
+                onClick={() => onSort('createdAt')}
               >
                   <div className="flex items-center gap-1">Ref # <ArrowUpDown size={14} className={sortField === 'createdAt' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
               <th 
                   className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
-                  onClick={() => handleSort('dateIdentified')}
+                  onClick={() => onSort('dateIdentified')}
               >
                   <div className="flex items-center gap-1">Date <ArrowUpDown size={14} className={sortField === 'dateIdentified' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
@@ -96,7 +83,7 @@ export const RegistryTable = ({
               <th className="px-6 py-4 w-1/3 min-w-[200px]">Description</th>
               <th 
                   className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
-                  onClick={() => handleSort('status')}
+                  onClick={() => onSort('status')}
               >
                   <div className="flex items-center gap-1">Status <ArrowUpDown size={14} className={sortField === 'status' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
@@ -105,7 +92,7 @@ export const RegistryTable = ({
               ) : null}
               <th 
                   className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition whitespace-nowrap"
-                  onClick={() => handleSort('riskLevel')}
+                  onClick={() => onSort('riskLevel')}
               >
                   <div className="flex items-center gap-1">Level / Feasibility <ArrowUpDown size={14} className={sortField === 'riskLevel' ? 'text-gray-600' : 'text-gray-300'}/></div>
               </th>
@@ -171,7 +158,7 @@ export const RegistryTable = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onViewAuditTrail(item);
+                        onSelectAuditTrail(item);
                       }}
                       className="text-gray-300 hover:text-gray-600 transition-colors p-1"
                       title="View Audit Trail"
@@ -189,5 +176,6 @@ export const RegistryTable = ({
         </table>
       </div>
     </div>
-  )
-};
+  )};
+
+export default RegistryTable;

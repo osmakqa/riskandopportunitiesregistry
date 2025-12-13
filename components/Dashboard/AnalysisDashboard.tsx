@@ -1,24 +1,25 @@
 
-import React, { useState } from 'react';
-import { Layers, ShieldAlert, CheckCircle2, Lightbulb, BarChart3, Filter } from 'lucide-react';
-import { RegistryItem } from '../../lib/types';
+import React from 'react';
+import { Filter, Layers, ShieldAlert, CheckCircle2, Lightbulb, BarChart3 } from 'lucide-react';
 import { SECTIONS } from '../../lib/constants';
-import { DonutChart } from './DonutChart';
-import { RiskHeatmap } from './RiskHeatmap';
+import { RegistryItem } from '../../lib/types';
+import DonutChart from './DonutChart';
+import RiskHeatmap from './RiskHeatmap';
 
 interface AnalysisDashboardProps {
   items: RegistryItem[];
   isIQA: boolean;
   selectedSection: string | null;
+  startDate: string;
+  endDate: string;
+  onStartDateChange: (date: string) => void;
+  onEndDateChange: (date: string) => void;
 }
 
-export const AnalysisDashboard = ({ items, isIQA, selectedSection }: AnalysisDashboardProps) => {
-    const [analysisStartDate, setAnalysisStartDate] = useState(new Date().getFullYear() + '-01-01');
-    const [analysisEndDate, setAnalysisEndDate] = useState(new Date().getFullYear() + '-12-31');
-
+const AnalysisDashboard = ({ items, isIQA, selectedSection, startDate, endDate, onStartDateChange, onEndDateChange }: AnalysisDashboardProps) => {
     const filteredItems = items.filter(i => {
        const dateToCheck = i.closedAt || i.createdAt;
-       return dateToCheck >= analysisStartDate && dateToCheck <= analysisEndDate;
+       return dateToCheck >= startDate && dateToCheck <= endDate;
     });
 
     const totalRisks = filteredItems.filter(i => i.type === 'RISK').length;
@@ -68,11 +69,11 @@ export const AnalysisDashboard = ({ items, isIQA, selectedSection }: AnalysisDas
              <div className="flex items-center gap-2 text-osmak-green-dark font-bold mb-1"><Filter size={20}/> Date Filter</div>
              <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">From</label>
-                <input type="date" className="border rounded p-2 text-sm bg-white text-gray-900" value={analysisStartDate} onChange={e => setAnalysisStartDate(e.target.value)} />
+                <input type="date" className="border rounded p-2 text-sm bg-white text-gray-900" value={startDate} onChange={e => onStartDateChange(e.target.value)} />
              </div>
              <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">To</label>
-                <input type="date" className="border rounded p-2 text-sm bg-white text-gray-900" value={analysisEndDate} onChange={e => setAnalysisEndDate(e.target.value)} />
+                <input type="date" className="border rounded p-2 text-sm bg-white text-gray-900" value={endDate} onChange={e => onEndDateChange(e.target.value)} />
              </div>
           </div>
 
@@ -195,4 +196,6 @@ export const AnalysisDashboard = ({ items, isIQA, selectedSection }: AnalysisDas
           )}
        </div>
     );
-};
+  };
+
+export default AnalysisDashboard;

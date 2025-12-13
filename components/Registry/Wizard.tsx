@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { PlusCircle, XCircle, ShieldAlert, Lightbulb, Info, ChevronDown, Loader2, Bot, Sparkles, Trash2, CheckCircle2, ArrowDownCircle } from 'lucide-react';
+import { PlusCircle, XCircle, ShieldAlert, Lightbulb, ChevronDown, Loader2, Bot, Info, Sparkles, Trash2, CheckCircle2, ClipboardList } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { RegistryItem, ActionPlan } from '../../lib/types';
+import { RegistryItem } from '../../lib/types';
 import { SOURCES, RISK_STRATEGIES, OPP_STRATEGIES, LIKELIHOOD_DESC, SEVERITY_DESC } from '../../lib/constants';
 import { calculateRiskLevel, getRiskColor } from '../../lib/utils';
 
@@ -12,24 +12,29 @@ interface WizardProps {
   onSave: (item: any) => void;
 }
 
-export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
+const Wizard = ({ section, onClose, onSave }: WizardProps) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<Partial<RegistryItem>>({
     section,
     type: 'RISK',
-    source: 'Process Review', 
+    source: 'Process Review', // Default to 'Process Review'
     actionPlans: [],
     dateIdentified: new Date().toISOString().split('T')[0]
   });
   
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [isSuggestingImpact, setIsSuggestingImpact] = useState(false); 
+
+  const [isSuggestingImpact, setIsSuggestingImpact] = useState(false);
   const [impactSuggestions, setImpactSuggestions] = useState<string[]>([]);
-  const [isSuggestingBenefit, setIsSuggestingBenefit] = useState(false); 
+
+  const [isSuggestingBenefit, setIsSuggestingBenefit] = useState(false);
   const [benefitSuggestions, setBenefitSuggestions] = useState<string[]>([]);
+
+
   const [isGeneratingPlans, setIsGeneratingPlans] = useState(false);
   const [suggestedPlans, setSuggestedPlans] = useState<any[]>([]);
+
   const [newPlan, setNewPlan] = useState({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
 
   const isMandatoryAction = true;
@@ -65,7 +70,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
         id: `AP-${Date.now()}`, 
         ...newPlan, 
         status: 'FOR_IMPLEMENTATION'
-      } as ActionPlan]
+      }]
     }));
     setNewPlan({ strategy: '', description: '', evidence: '', responsiblePerson: '', targetDate: '' });
   };
@@ -118,7 +123,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
              }
          });
          
-         const ideas = JSON.parse(response.text?.trim() || '[]');
+         const ideas = JSON.parse(response.text.trim());
          if (Array.isArray(ideas)) {
              setSuggestions(ideas);
          }
@@ -162,7 +167,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
         }
       });
       
-      const impacts = JSON.parse(response.text?.trim() || '[]');
+      const impacts = JSON.parse(response.text.trim());
       if (Array.isArray(impacts)) {
         setImpactSuggestions(impacts);
       }
@@ -206,7 +211,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
         }
       });
       
-      const benefits = JSON.parse(response.text?.trim() || '[]');
+      const benefits = JSON.parse(response.text.trim());
       if (Array.isArray(benefits)) {
         setBenefitSuggestions(benefits);
       }
@@ -258,7 +263,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
              }
          });
          
-         const plans = JSON.parse(response.text?.trim() || '[]');
+         const plans = JSON.parse(response.text.trim());
          if (Array.isArray(plans)) {
              setSuggestedPlans(plans);
          }
@@ -319,11 +324,11 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Process / Function</label>
                 <input 
-                  type="text" 
-                  className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" 
-                  value={data.process || ''} 
-                  onChange={e => setData({...data, process: e.target.value})} 
-                  placeholder="e.g. Patient Admission, Medication Dispensing, Supply Chain Management..." 
+                    type="text" 
+                    className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" 
+                    value={data.process || ''} 
+                    onChange={e => setData({...data, process: e.target.value})} 
+                    placeholder="e.g. Document Control (Patient Admission, Medication Dispensing, Supply Chain Management...)" 
                 />
               </div>
 
@@ -380,7 +385,12 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                         ))}
                     </div>
                 )}
-                <textarea className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" value={data.description || ''} onChange={e => setData({...data, description: e.target.value})} placeholder="Describe the risk or opportunity..." />
+                <textarea 
+                    className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" 
+                    value={data.description || ''} 
+                    onChange={e => setData({...data, description: e.target.value})} 
+                    placeholder="Describe the risk or opportunity... Example: Failure to verify patient ID before medication administration leading to..." 
+                />
               </div>
             </div>
           )}
@@ -416,10 +426,10 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                     </div>
                 )}
                 <textarea 
-                  className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" 
-                  value={data.impactQMS || ''} 
-                  onChange={e => setData({...data, impactQMS: e.target.value})} 
-                  placeholder="e.g. Delays in patient care, Regulatory non-compliance, Financial loss, Customer dissatisfaction, Accreditation risk..."
+                    className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" 
+                    value={data.impactQMS || ''} 
+                    onChange={e => setData({...data, impactQMS: e.target.value})} 
+                    placeholder="Describe potential impact... Example: Patient safety compromise, legal non-conformity, delay in service..."
                 />
               </div>
               
@@ -463,10 +473,10 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Existing Controls</label>
                 <textarea 
-                  className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" 
-                  value={data.existingControls || ''} 
-                  onChange={e => setData({...data, existingControls: e.target.value})} 
-                  placeholder="e.g. Standard Operating Procedures (SOPs), Staff Training, Regular Audits, Preventive Maintenance, Insurance, Quality Checks..." 
+                    className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" 
+                    value={data.existingControls || ''} 
+                    onChange={e => setData({...data, existingControls: e.target.value})} 
+                    placeholder="What is currently in place? Example: SOPs, Staff Training, Equipment Maintenance, Regular Audits, Quality Checks..." 
                 />
               </div>
             </div>
@@ -556,6 +566,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                <div className="border rounded-lg p-4 bg-gray-50">
                   <h4 className="font-bold text-sm text-gray-700 mb-3">Add Action Plan</h4>
 
+                  {/* Suggestions Area */}
                    {suggestedPlans.length > 0 && (
                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200 animate-fadeIn mb-4">
                            <div className="flex justify-between items-center mb-3">
@@ -620,7 +631,7 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                      />
                      <input 
                         className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
-                        placeholder="Verification / Evidence (e.g. Photo)" 
+                        placeholder="Verification / Evidence. Example: Photo log, Signed attendance sheet, Certificate..." 
                         value={newPlan.evidence}
                         onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
                      />
@@ -641,14 +652,9 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                      <button 
                         onClick={addActionPlan}
                         disabled={!newPlan.description || !newPlan.strategy}
-                        className={`w-full py-4 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all transform hover:-translate-y-1 shadow-md
-                        ${!newPlan.description || !newPlan.strategy
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-200 ring-2 ring-offset-1 ring-blue-400'
-                        }`}
+                        className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded shadow-lg text-sm font-bold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 animate-pulse"
                      >
-                        <ArrowDownCircle size={20} className={!newPlan.description || !newPlan.strategy ? '' : 'animate-bounce'} />
-                        ADD PLAN TO LIST (Click to Confirm)
+                        <PlusCircle size={18}/> ADD PLAN TO LIST (REQUIRED TO PROCEED)
                      </button>
                   </div>
                </div>
@@ -689,3 +695,5 @@ export const Wizard = ({ section, onClose, onSave }: WizardProps) => {
     </div>
   );
 }
+
+export default Wizard;

@@ -1,7 +1,7 @@
 
-import { RegistryItem, AuditEvent, RiskLevel, WorkflowStatus, ActionStatus } from './types';
+import { RegistryItem, AuditEvent, WorkflowStatus, RiskLevel, ActionStatus } from './types';
+import { GOOGLE_SHEET_SCRIPT_URL } from './constants';
 
-// Data Mapping Helpers
 export const mapToDb = (item: RegistryItem) => ({
   id: item.id,
   section: item.section,
@@ -29,6 +29,35 @@ export const mapToDb = (item: RegistryItem) => ({
   closed_at: item.closedAt,
   audit_trail: item.auditTrail
 });
+
+export const backupToGoogleSheets = async (item: RegistryItem) => {
+  if (!GOOGLE_SHEET_SCRIPT_URL) {
+    console.warn("Google Sheet Backup Skipped: No Script URL Configured");
+    return;
+  }
+  
+  const dbItem = mapToDb(item);
+  
+  const payload = {
+    ...dbItem,
+    action_plans: JSON.stringify(dbItem.action_plans),
+    audit_trail: JSON.stringify(dbItem.audit_trail)
+  };
+
+  try {
+    await fetch(GOOGLE_SHEET_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    console.log("Backup sent to Google Sheets");
+  } catch (e) {
+    console.error("Google Sheets Backup Failed", e);
+  }
+};
 
 export const mapFromDb = (dbItem: any): RegistryItem => {
   let trail: AuditEvent[] = [];
@@ -72,8 +101,8 @@ export const mapFromDb = (dbItem: any): RegistryItem => {
       actionPlans: (dbItem.action_plans || []) as any[],
       residualLikelihood: dbItem.residual_likelihood,
       residualSeverity: dbItem.residual_severity,
-      residualRiskRating: dbItem.risk_rating, // Initial value fallback if residuals not set
-      residualRiskLevel: dbItem.risk_level, // Initial value fallback
+      residualRiskRating: dbItem.risk_rating,
+      residualRiskLevel: dbItem.risk_level,
       effectivenessRemarks: dbItem.effectiveness_remarks,
       reassessmentDate: dbItem.reassessment_date,
       status: dbItem.status,
@@ -112,15 +141,6 @@ export const addAuditEvent = (item: RegistryItem, event: string, user: string): 
   };
 };
 
-export const calculateRiskLevel = (l: number, s: number): RiskLevel => {
-  const rating = l * s;
-  if (rating >= 16) return 'CRITICAL';
-  if (rating >= 11) return 'HIGH';
-  if (rating >= 6) return 'MODERATE';
-  return 'LOW';
-};
-
-// Styling Helpers
 export const getPillColor = (status: WorkflowStatus) => {
     switch (status) {
       case 'IMPLEMENTATION': return 'bg-purple-100 text-purple-800';
@@ -149,6 +169,14 @@ export const getLevelPillColor = (level?: RiskLevel) => {
       case 'LOW': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
+};
+
+export const calculateRiskLevel = (l: number, s: number): RiskLevel => {
+  const rating = l * s;
+  if (rating >= 16) return 'CRITICAL';
+  if (rating >= 11) return 'HIGH';
+  if (rating >= 6) return 'MODERATE';
+  return 'LOW';
 };
 
 export const getRiskColor = (level?: RiskLevel) => {
@@ -194,84 +222,4 @@ export const getDaysRemaining = (item: RegistryItem): { days: number, label: str
   else if (days < 7) color = 'text-orange-600 font-bold';
 
   return { days, label: days < 0 ? `${Math.abs(days)} days overdue` : `${days} days left`, color };
-};
-
-export const exportCSV = (data: RegistryItem[], filename: string, displayIdMap: Record<string, string>) => {
-    const headers = [
-        'No.',
-        'Process / Function',
-        'Source',
-        'Type (Risk / Opportunity)',
-        'Description of Risk / Opportunity',
-        'Potential Impact on QMS',
-        'Likelihood (1–5)',
-        'Severity (1–5)',
-        'Risk Rating (L×S)',
-        'Risk Level',
-        'Existing Controls / Mitigation',
-        'Actions Plan (describe the action)',
-        'Responsible Person',
-        'Target Date',
-        'Verification / Evidence',
-        'Status (Open/Closed)',
-        'Date of Re-Assessment',
-        'Residual Likelihood (1–5)',
-        'Residual Severity (1–5)',
-        'Residual Risk Rating (L×S)',
-        'Residual Risk Level',
-        'Remarks on Effectiveness'
-    ];
-
-    const formatCell = (value: any) => {
-        if (value === null || value === undefined) return '""';
-        const stringValue = String(value);
-        const escapedValue = stringValue.replace(/"/g, '""');
-        if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
-             return `"${escapedValue}"`;
-        }
-        return stringValue;
-    };
-
-    const rows = data.map(item => {
-        const actionPlansCombinedDesc = item.actionPlans.map(p => `${p.strategy}: ${p.description}`).join('; ');
-        const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
-        const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
-        const evidences = item.actionPlans.map(p => p.evidence).join('; ');
-
-        const rowData = [
-            displayIdMap[item.id] || item.id,
-            item.process,
-            item.source,
-            item.type,
-            item.description,
-            item.type === 'RISK' ? item.impactQMS : '',
-            item.likelihood,
-            item.severity,
-            item.riskRating,
-            item.riskLevel,
-            item.existingControls,
-            actionPlansCombinedDesc,
-            responsiblePersons,
-            targetDates,
-            evidences,
-            item.status === 'CLOSED' ? 'Closed' : 'Open',
-            item.reassessmentDate,
-            item.residualLikelihood,
-            item.residualSeverity,
-            item.residualRiskRating,
-            item.residualRiskLevel,
-            item.effectivenessRemarks
-        ];
-        
-        return rowData.map(val => formatCell(val || '')).join(',');
-    });
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${filename}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 };

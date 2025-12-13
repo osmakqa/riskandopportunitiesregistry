@@ -1,28 +1,22 @@
 
 import React, { useState, useEffect } from 'react';
-import { Pencil, Save, XCircle, Calendar, FileText, Activity, ClipboardCheck, CheckCircle2, X, Trash2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Pencil, Save, XCircle, Calendar, FileText, Activity, ClipboardCheck, AlertTriangle, Trash2, CheckCircle2, RotateCcw, X } from 'lucide-react';
 import { RegistryItem, ActionPlan } from '../../lib/types';
-import { CREDENTIALS, SOURCES, RISK_STRATEGIES, OPP_STRATEGIES, LIKELIHOOD_DESC, SEVERITY_DESC } from '../../lib/constants';
-import { addAuditEvent, getStatusColor, formatStatus, getActionPillColor, calculateRiskLevel, getRiskColor, getLevelPillColor } from '../../lib/utils';
+import { SOURCES, RISK_STRATEGIES, OPP_STRATEGIES, LIKELIHOOD_DESC, SEVERITY_DESC, CREDENTIALS } from '../../lib/constants';
+import { calculateRiskLevel, getRiskColor, getStatusColor, formatStatus, getActionPillColor, addAuditEvent, getLevelPillColor } from '../../lib/utils';
 
-interface ItemDetailModalProps {
-  item: RegistryItem;
-  isIQA: boolean;
-  currentUser: string;
-  displayId: string;
-  onClose: () => void;
-  onUpdate: (updated: RegistryItem) => void;
-  onDelete: (id: string) => void;
+interface ItemDetailModalProps { 
+  item: RegistryItem, 
+  isIQA: boolean, 
+  currentUser: string,
+  displayId: string,
+  onClose: () => void, 
+  onUpdate: (updated: RegistryItem) => void,
+  onDelete: (id: string) => void
 }
 
-export const ItemDetailModal = ({ 
-  item, 
-  isIQA, 
-  currentUser,
-  displayId,
-  onClose, 
-  onUpdate, 
-  onDelete 
+const ItemDetailModal = ({ 
+  item, isIQA, currentUser, displayId, onClose, onUpdate, onDelete 
 }: ItemDetailModalProps) => {
   const [reassessment, setReassessment] = useState({
     likelihood: 1,
@@ -251,6 +245,7 @@ export const ItemDetailModal = ({
                 className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-white"
                 value={editData.description}
                 onChange={e => setEditData({...editData, description: e.target.value})}
+                placeholder="Describe the risk or opportunity... Example: Failure to verify patient ID before medication administration leading to..."
               />
             ) : (
               <h2 className="text-xl font-bold text-gray-900">{item.description}</h2>
@@ -290,12 +285,12 @@ export const ItemDetailModal = ({
                 <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Process / Function</span>
                 {isEditing ? (
                    <input 
-                      type="text" 
-                      className="w-full border rounded p-1 bg-white text-gray-900" 
-                      value={editData.process} 
-                      onChange={e => setEditData({...editData, process: e.target.value})} 
-                      placeholder="e.g. Patient Admission, Medication Dispensing..."
-                   />
+                    type="text" 
+                    className="w-full border rounded p-1 bg-white text-gray-900" 
+                    value={editData.process} 
+                    onChange={e => setEditData({...editData, process: e.target.value})}
+                    placeholder="e.g. Document Control (Patient Admission...)"
+                    />
                 ) : (
                    <span className="font-semibold text-gray-800">{item.process}</span>
                 )}
@@ -352,10 +347,10 @@ export const ItemDetailModal = ({
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Potential Impact on QMS</span>
                      {isEditing ? (
                         <textarea 
-                          className="w-full border rounded p-2 bg-white text-gray-900" 
-                          value={editData.impactQMS} 
-                          onChange={e => setEditData({...editData, impactQMS: e.target.value})} 
-                          placeholder="e.g. Delays in patient care, Regulatory non-compliance, Financial loss..."
+                            className="w-full border rounded p-2 bg-white text-gray-900" 
+                            value={editData.impactQMS} 
+                            onChange={e => setEditData({...editData, impactQMS: e.target.value})} 
+                            placeholder="Describe potential impact... Example: Patient safety compromise..."
                         />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.impactQMS}</p>
@@ -365,10 +360,10 @@ export const ItemDetailModal = ({
                      <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Existing Controls / Mitigation</span>
                      {isEditing ? (
                         <textarea 
-                          className="w-full border rounded p-2 bg-white text-gray-900" 
-                          value={editData.existingControls} 
-                          onChange={e => setEditData({...editData, existingControls: e.target.value})}
-                          placeholder="e.g. Standard Operating Procedures (SOPs), Staff Training, Regular Audits..."
+                            className="w-full border rounded p-2 bg-white text-gray-900" 
+                            value={editData.existingControls} 
+                            onChange={e => setEditData({...editData, existingControls: e.target.value})} 
+                            placeholder="What is currently in place? Example: SOPs, Staff Training..."
                         />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.existingControls || 'N/A'}</p>
@@ -972,3 +967,5 @@ export const ItemDetailModal = ({
     </div>
   );
 }
+
+export default ItemDetailModal;

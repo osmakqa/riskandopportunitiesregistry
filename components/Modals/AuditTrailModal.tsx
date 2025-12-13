@@ -3,7 +3,7 @@ import React from 'react';
 import { PlusCircle, CheckCircle2, Pencil, RotateCcw, Activity, XCircle } from 'lucide-react';
 import { AuditEvent } from '../../lib/types';
 
-export const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[], onClose: () => void, itemId: string }) => {
+const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[], onClose: () => void, itemId: string }) => {
     const getIcon = (event: string) => {
         if (event.includes('Created')) return <PlusCircle size={16} className="text-blue-500" />;
         if (event.includes('Closed') || event.includes('Verified')) return <CheckCircle2 size={16} className="text-green-500" />;
@@ -60,3 +60,5 @@ export const AuditTrailModal = ({ trail, onClose, itemId }: { trail: AuditEvent[
         </div>
     );
 };
+
+export default AuditTrailModal;

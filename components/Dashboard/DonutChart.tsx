@@ -2,7 +2,7 @@
 import React from 'react';
 import { DonutChartProps } from '../../lib/types';
 
-export const DonutChart = ({ title, data, colors }: DonutChartProps) => {
+const DonutChart = ({ title, data, colors }: DonutChartProps) => {
     const total = Object.values(data).reduce((a, b) => a + b, 0);
     let currentAngle = 0;
 
@@ -63,3 +63,5 @@ export const DonutChart = ({ title, data, colors }: DonutChartProps) => {
         </div>
     );
 };
+
+export default DonutChart;

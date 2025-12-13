@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
+import AppHeader from '../Layout/AppHeader';
 import { BookOpen, FileText, Video } from 'lucide-react';
-import { AppHeader } from '../Layout/AppHeader';
-import { WorkflowModal } from '../Modals/WorkflowModal';
-import { UserManualModal } from '../Modals/UserManualModal';
 import { SECTIONS, IQA_USERS, CREDENTIALS } from '../../lib/constants';
+import WorkflowModal from '../Modals/WorkflowModal';
+import UserManualModal from '../Modals/UserManualModal';
 
-export const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
+const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   const [section, setSection] = useState(SECTIONS[0]);
   const [iqaUser, setIqaUser] = useState(IQA_USERS[0]);
   const [isIQA, setIsIQA] = useState(false);
@@ -30,7 +30,7 @@ export const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
   return (
     <div className="min-h-screen bg-[#F0FFF4] flex items-center justify-center p-4">
       {showWorkflow && <WorkflowModal onClose={() => setShowWorkflow(false)} />}
-      {showManual && <UserManualModal onClose={() => setShowWorkflow(false)} />}
+      {showManual && <UserManualModal onClose={() => setShowManual(false)} />}
       
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <AppHeader title="OSPITAL NG MAKATI" subtitle="Risk & Opportunities Registry System" />
@@ -110,3 +110,5 @@ export const Login = ({ onLogin }: { onLogin: (section: string) => void }) => {
     </div>
   );
 };
+
+export default Login;

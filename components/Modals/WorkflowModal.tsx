@@ -2,7 +2,7 @@
 import React from 'react';
 import { BookOpen, XCircle, FileText, Activity, ClipboardCheck, CheckCircle2 } from 'lucide-react';
 
-export const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
+const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
     <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
       <div className="p-5 bg-osmak-green text-white flex justify-between items-center border-b border-osmak-800">
@@ -83,3 +83,5 @@ export const WorkflowModal = ({ onClose }: { onClose: () => void }) => (
     </div>
   </div>
 );
+
+export default WorkflowModal;
