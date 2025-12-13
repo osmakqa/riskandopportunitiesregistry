@@ -16,7 +16,7 @@ const SidebarHeader = ({ onClose }: { onClose: () => void }) => (
             <span className="text-green-50 text-[0.65rem] font-medium opacity-90 tracking-wider mt-0.5">Risk & Opportunities Registry</span>
         </div>
         </div>
-        <button onClick={onClose} className="md:hidden text-white p-1 hover:bg-green-700 rounded-full transition-colors">
+        <button onClick={onClose} className="lg:hidden text-white p-1 hover:bg-green-700 rounded-full transition-colors">
             <X size={24} />
         </button>
     </header>
