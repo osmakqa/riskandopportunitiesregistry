@@ -30,18 +30,72 @@ export const mapToDb = (item: RegistryItem) => ({
   audit_trail: item.auditTrail
 });
 
-export const backupToGoogleSheets = async (item: RegistryItem) => {
+export const getDisplayIds = (items: RegistryItem[]) => {
+  const map: Record<string, string> = {};
+  
+  const risks = items.filter(i => i.type === 'RISK').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const opps = items.filter(i => i.type === 'OPPORTUNITY').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  
+  risks.forEach((item, index) => {
+    map[item.id] = `R${index + 1}`;
+  });
+  
+  opps.forEach((item, index) => {
+    map[item.id] = `O${index + 1}`;
+  });
+  
+  return map;
+};
+
+export const backupToGoogleSheets = async (item: RegistryItem, displayIds?: Record<string, string>) => {
   if (!GOOGLE_SHEET_SCRIPT_URL) {
     console.warn("Google Sheet Backup Skipped: No Script URL Configured");
     return;
   }
   
-  const dbItem = mapToDb(item);
-  
+  // Helper to format cells consistent with CSV export logic
+  const formatCell = (value: any) => {
+      if (value === null || value === undefined) return '';
+      return String(value);
+  };
+
+  const actionPlansCombinedDesc = item.actionPlans.map(p => `${p.strategy}: ${p.description}`).join('; ');
+  const responsiblePersons = item.actionPlans.map(p => p.responsiblePerson).join('; ');
+  const targetDates = item.actionPlans.map(p => p.targetDate).join('; ');
+  const evidences = item.actionPlans.map(p => p.evidence).join('; ');
+
+  // Determine Display ID (Ref No)
+  // If displayIds map is not passed (e.g. immediate create), fallback to internal ID or logic needs to calculate it.
+  // Ideally, backup should happen after state update where displayIds are recalculated, or we accept we use internal ID if map missing.
+  const displayId = displayIds ? (displayIds[item.id] || item.id) : item.id;
+
+  // Construct payload exactly matching CSV columns
+  // Note: Keys here will become headers in Google Sheets
   const payload = {
-    ...dbItem,
-    action_plans: JSON.stringify(dbItem.action_plans),
-    audit_trail: JSON.stringify(dbItem.audit_trail)
+    'No.': displayId,
+    'Process / Function': formatCell(item.process),
+    'Source': formatCell(item.source),
+    'Type (Risk / Opportunity)': formatCell(item.type),
+    'Description of Risk / Opportunity': formatCell(item.description),
+    'Potential Impact on QMS': item.type === 'RISK' ? formatCell(item.impactQMS) : '',
+    'Likelihood (1–5)': formatCell(item.likelihood),
+    'Severity (1–5)': formatCell(item.severity),
+    'Risk Rating (L×S)': formatCell(item.riskRating),
+    'Risk Level': formatCell(item.riskLevel),
+    'Existing Controls / Mitigation': formatCell(item.existingControls),
+    'Actions Plan (describe the action)': actionPlansCombinedDesc,
+    'Responsible Person': responsiblePersons,
+    'Target Date': targetDates,
+    'Verification / Evidence': evidences,
+    'Status (Open/Closed)': item.status === 'CLOSED' ? 'Closed' : 'Open',
+    'Date of Re-Assessment': formatCell(item.reassessmentDate),
+    'Residual Likelihood (1–5)': formatCell(item.residualLikelihood),
+    'Residual Severity (1–5)': formatCell(item.residualSeverity),
+    'Residual Risk Rating (L×S)': formatCell(item.residualRiskRating),
+    'Residual Risk Level': formatCell(item.residualRiskLevel),
+    'Remarks on Effectiveness': formatCell(item.effectivenessRemarks),
+    // Hidden System Columns for Script Identification
+    'id': item.id // Keep internal ID for the script to identify row for updates
   };
 
   try {
@@ -110,23 +164,6 @@ export const mapFromDb = (dbItem: any): RegistryItem => {
       closedAt: dbItem.closed_at,
       auditTrail: trail
   };
-};
-
-export const getDisplayIds = (items: RegistryItem[]) => {
-  const map: Record<string, string> = {};
-  
-  const risks = items.filter(i => i.type === 'RISK').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  const opps = items.filter(i => i.type === 'OPPORTUNITY').sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-  
-  risks.forEach((item, index) => {
-    map[item.id] = `R${index + 1}`;
-  });
-  
-  opps.forEach((item, index) => {
-    map[item.id] = `O${index + 1}`;
-  });
-  
-  return map;
 };
 
 export const addAuditEvent = (item: RegistryItem, event: string, user: string): RegistryItem => {

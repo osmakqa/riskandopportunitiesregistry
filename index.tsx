@@ -139,10 +139,17 @@ const App = () => {
     try {
         const { error } = await supabase.from('registry_items').insert(mapToDb(item));
         if (error) throw error;
-        setItems(prev => [item, ...prev]);
+        
+        // Optimistic update
+        const newItems = [item, ...items];
+        setItems(newItems);
         setIsWizardOpen(false);
+
+        // Recalculate IDs for backup to ensure accuracy
+        const newDisplayMap = getDisplayIds(newItems);
+        
         // Backup to Google Sheets
-        backupToGoogleSheets(item);
+        backupToGoogleSheets(item, newDisplayMap);
     } catch (err) {
         alert("Failed to save to database. Please check connection.");
         console.error(err);
@@ -153,10 +160,12 @@ const App = () => {
     try {
         const { error } = await supabase.from('registry_items').update(mapToDb(updatedItem)).eq('id', updatedItem.id);
         if (error) throw error;
+        
         setItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
         setSelectedItem(updatedItem);
-        // Backup to Google Sheets
-        backupToGoogleSheets(updatedItem);
+        
+        // Backup to Google Sheets (using existing map is fine for updates as IDs don't change often)
+        backupToGoogleSheets(updatedItem, displayIdMap);
     } catch (err) {
         alert("Update failed.");
         console.error(err);
@@ -314,7 +323,7 @@ const App = () => {
 
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 xl:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -335,7 +344,7 @@ const App = () => {
           onLogout={() => setUser(null)}
       />
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative pt-20 md:pt-8 bg-[#F0FFF4]">
+      <main className="flex-1 overflow-y-auto p-4 xl:p-8 relative pt-20 xl:pt-8 bg-[#F0FFF4] xl:ml-0">
         <header className="flex justify-between items-center mb-8">
            <div>
               <h2 className="text-2xl font-bold text-gray-900">
