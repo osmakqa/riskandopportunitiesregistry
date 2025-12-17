@@ -328,7 +328,7 @@ const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                     className="w-full border p-2 rounded bg-white text-gray-900 border-gray-300" 
                     value={data.process || ''} 
                     onChange={e => setData({...data, process: e.target.value})} 
-                    placeholder="e.g. Document Control (Patient Admission, Medication Dispensing, Supply Chain Management...)" 
+                    placeholder="Guide: State the specific operational process. Example: Patient Admission, Medication Dispensing, Supply Chain Management" 
                 />
               </div>
 
@@ -389,7 +389,7 @@ const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                     className="w-full border p-2 rounded h-24 bg-white text-gray-900 border-gray-300" 
                     value={data.description || ''} 
                     onChange={e => setData({...data, description: e.target.value})} 
-                    placeholder="Describe the risk or opportunity... Example: Failure to verify patient ID before medication administration leading to..." 
+                    placeholder="Guide: Describe the risk (what can go wrong) or opportunity (what can be improved). Example: Failure to verify patient ID before medication administration." 
                 />
               </div>
             </div>
@@ -429,7 +429,7 @@ const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                     className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" 
                     value={data.impactQMS || ''} 
                     onChange={e => setData({...data, impactQMS: e.target.value})} 
-                    placeholder="Describe potential impact... Example: Patient safety compromise, legal non-conformity, delay in service..."
+                    placeholder="Guide: Describe consequences on Quality, Safety, or Compliance. Example: Patient safety compromise, legal non-conformity, delay in service."
                 />
               </div>
               
@@ -476,7 +476,7 @@ const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                     className="w-full border p-2 rounded h-20 bg-white text-gray-900 border-gray-300" 
                     value={data.existingControls || ''} 
                     onChange={e => setData({...data, existingControls: e.target.value})} 
-                    placeholder="What is currently in place? Example: SOPs, Staff Training, Equipment Maintenance, Regular Audits, Quality Checks..." 
+                    placeholder="Guide: List current preventive measures. Example: SOPs, Regular Staff Training, Equipment Maintenance, Quality Audits." 
                 />
               </div>
             </div>
@@ -631,7 +631,7 @@ const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                      />
                      <input 
                         className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300 text-sm" 
-                        placeholder="Verification / Evidence. Example: Photo log, Signed attendance sheet, Certificate..." 
+                        placeholder="Guide: Proof of completion. Example: Photo log, Signed attendance sheet, Certificate, Official Receipt." 
                         value={newPlan.evidence}
                         onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
                      />
@@ -654,7 +654,7 @@ const Wizard = ({ section, onClose, onSave }: WizardProps) => {
                         disabled={!newPlan.description || !newPlan.strategy}
                         className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded shadow-lg text-sm font-bold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 transform hover:scale-[1.02] transition-all flex items-center justify-center gap-2 animate-pulse"
                      >
-                        <PlusCircle size={18}/> ADD PLAN TO LIST (REQUIRED TO PROCEED)
+                        <PlusCircle size={18}/> CLICK HERE TO ADD PLAN (Required)
                      </button>
                   </div>
                </div>

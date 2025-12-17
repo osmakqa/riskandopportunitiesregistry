@@ -16,6 +16,7 @@ export const SECTIONS = [
   'General Services Section',
   'Health Records and Documents Management',
   'Housekeeping Laundry and Linen',
+  'Human Resources and Management Section',
   'Industrial Clinic',
   'Information Technology',
   'Laboratory',
@@ -26,6 +27,7 @@ export const SECTIONS = [
   'Physical and Occupational Therapy',
   'Radiology',
   'Requisition Section',
+  'Respiratory Diagnostic Section',
   'Supply Management Section',
   'Surgical Care Complex'
 ];

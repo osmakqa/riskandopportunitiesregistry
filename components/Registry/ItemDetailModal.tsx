@@ -245,7 +245,7 @@ const ItemDetailModal = ({
                 className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-white"
                 value={editData.description}
                 onChange={e => setEditData({...editData, description: e.target.value})}
-                placeholder="Describe the risk or opportunity... Example: Failure to verify patient ID before medication administration leading to..."
+                placeholder="Guide: Describe the risk (what can go wrong) or opportunity (what can be improved). Example: Failure to verify patient ID before medication administration."
               />
             ) : (
               <h2 className="text-xl font-bold text-gray-900">{item.description}</h2>
@@ -289,7 +289,7 @@ const ItemDetailModal = ({
                     className="w-full border rounded p-1 bg-white text-gray-900" 
                     value={editData.process} 
                     onChange={e => setEditData({...editData, process: e.target.value})}
-                    placeholder="e.g. Document Control (Patient Admission...)"
+                    placeholder="Guide: State the specific operational process. Example: Patient Admission, Medication Dispensing, Supply Chain Management"
                     />
                 ) : (
                    <span className="font-semibold text-gray-800">{item.process}</span>
@@ -350,7 +350,7 @@ const ItemDetailModal = ({
                             className="w-full border rounded p-2 bg-white text-gray-900" 
                             value={editData.impactQMS} 
                             onChange={e => setEditData({...editData, impactQMS: e.target.value})} 
-                            placeholder="Describe potential impact... Example: Patient safety compromise..."
+                            placeholder="Guide: Describe consequences on Quality, Safety, or Compliance. Example: Patient safety compromise, legal non-conformity, delay in service."
                         />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.impactQMS}</p>
@@ -363,7 +363,7 @@ const ItemDetailModal = ({
                             className="w-full border rounded p-2 bg-white text-gray-900" 
                             value={editData.existingControls} 
                             onChange={e => setEditData({...editData, existingControls: e.target.value})} 
-                            placeholder="What is currently in place? Example: SOPs, Staff Training..."
+                            placeholder="Guide: List current preventive measures. Example: SOPs, Regular Staff Training, Equipment Maintenance, Quality Audits."
                         />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.existingControls || 'N/A'}</p>
@@ -735,7 +735,7 @@ const ItemDetailModal = ({
                    />
                    <input 
                      type="text" 
-                     placeholder="Verification / Evidence (e.g. Photo log, Certificate)"
+                     placeholder="Guide: Proof of completion. Example: Photo log, Signed attendance sheet, Certificate, Official Receipt."
                      className="w-full p-2 border rounded bg-white text-gray-900 border-gray-300"
                      value={newPlan.evidence}
                      onChange={e => setNewPlan({...newPlan, evidence: e.target.value})}
