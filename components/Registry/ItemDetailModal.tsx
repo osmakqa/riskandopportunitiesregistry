@@ -495,8 +495,8 @@ const ItemDetailModal = ({
               )}
             </div>
 
-            <div className="border rounded-lg overflow-hidden shadow-sm">
-              <table className="w-full text-sm text-left">
+            <div className="border rounded-lg overflow-x-auto shadow-sm">
+              <table className="w-full text-sm text-left min-w-[900px]">
                 <thead className="bg-gray-50 text-gray-500 font-medium border-b">
                   <tr>
                     <th className="px-4 py-3">Strategy</th>
@@ -587,7 +587,7 @@ const ItemDetailModal = ({
                                             }));
                                         }
                                     }} 
-                                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm"
+                                    className="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 shadow-sm whitespace-nowrap"
                                 >
                                   Completed
                                 </button>
@@ -666,30 +666,32 @@ const ItemDetailModal = ({
                                     </div>
                                 )}
                                 
-                                <div className="flex gap-4 items-end">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-bold text-green-800 mb-1">Completion Remarks (Optional)</label>
-                                    <input 
-                                    type="text" 
-                                    className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
-                                    placeholder="e.g. Installed software on May 20, 2024. Evidence attached."
-                                    value={completionRemarks}
-                                    onChange={e => setCompletionRemarks(e.target.value)}
-                                    />
-                                </div>
-                                <button 
-                                    onClick={() => handleUserMarkCompleted(ap.id)}
-                                    disabled={isPlanOverdue(ap) && !delayReason.trim()}
-                                    className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Submit for Verification
-                                </button>
-                                <button 
-                                    onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); setDelayReason(''); }}
-                                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300"
-                                >
-                                    Cancel
-                                </button>
+                                <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-end">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-green-800 mb-1">Completion Remarks (Optional)</label>
+                                        <input 
+                                        type="text" 
+                                        className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
+                                        placeholder="e.g. Installed software on May 20, 2024. Evidence attached."
+                                        value={completionRemarks}
+                                        onChange={e => setCompletionRemarks(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex gap-2 shrink-0">
+                                        <button 
+                                            onClick={() => handleUserMarkCompleted(ap.id)}
+                                            disabled={isPlanOverdue(ap) && !delayReason.trim()}
+                                            className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed flex-1 md:flex-none"
+                                        >
+                                            Submit for Verification
+                                        </button>
+                                        <button 
+                                            onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); setDelayReason(''); }}
+                                            className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300 flex-1 md:flex-none"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                           </td>
