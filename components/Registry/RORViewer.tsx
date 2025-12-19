@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Printer, Filter, ChevronDown, Search, Download, FileText, Activity, ShieldAlert, Lightbulb } from 'lucide-react';
+import { Printer, Filter, ChevronDown, Search, Download, FileText, Activity, ShieldAlert, Lightbulb, FileDown, Loader2 } from 'lucide-react';
 import { RegistryItem } from '../../lib/types';
 import { SECTIONS } from '../../lib/constants';
 
@@ -8,6 +8,8 @@ interface RORViewerProps {
   items: RegistryItem[];
   displayIdMap: Record<string, string>;
 }
+
+declare const html2pdf: any;
 
 // Mapping from Section names to PDF Metadata
 const SECTION_METADATA: Record<string, { title: string, docNo: string }> = {
@@ -45,6 +47,7 @@ const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterItemId, setFilterItemId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -75,6 +78,39 @@ const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!reportRef.current || filterSection === 'ALL') return;
+    
+    setIsGeneratingPDF(true);
+    const element = reportRef.current;
+    
+    // Config for Legal Landscape: 14in x 8.5in
+    // Set margins to absolute zero on the left/right to ensure fit
+    const opt = {
+      margin: [0, 0.001, 0, 0.001], 
+      filename: `${filterSection.replace(/\s+/g, '_')}_ROR_Report.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 4.5, 
+        useCORS: true, 
+        logging: false,
+        letterRendering: true,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1400 
+      },
+      jsPDF: { unit: 'in', format: 'legal', orientation: 'landscape', compress: true }
+    };
+
+    try {
+        await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+        console.error("PDF Generation failed:", err);
+    } finally {
+        setIsGeneratingPDF(false);
+    }
   };
 
   const currentMetadata = useMemo(() => {
@@ -126,12 +162,20 @@ const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
               {availableItemIds.map(id => <option key={id} value={id}>{id}</option>)}
             </select>
           </div>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button 
                 onClick={handlePrint}
-                className="w-full bg-osmak-green hover:bg-osmak-green-dark text-white font-bold py-2 rounded-lg shadow-md transition flex items-center justify-center gap-2"
+                className="flex-1 bg-osmak-green hover:bg-osmak-green-dark text-white font-bold py-2 rounded-lg shadow-md transition flex items-center justify-center gap-2"
             >
-                <Printer size={18}/> Print Report
+                <Printer size={18}/> <span className="hidden sm:inline">Print</span>
+            </button>
+            <button 
+                onClick={handleDownloadPDF}
+                disabled={filterSection === 'ALL' || isGeneratingPDF}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {isGeneratingPDF ? <Loader2 size={18} className="animate-spin"/> : <FileDown size={18}/>} 
+                <span className="hidden sm:inline">{isGeneratingPDF ? 'Working...' : 'PDF'}</span>
             </button>
           </div>
         </div>
@@ -139,135 +183,151 @@ const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
 
       {/* Report Container */}
       <div className="bg-white shadow-2xl rounded-lg mx-auto overflow-x-auto print:shadow-none print:m-0 print:p-0" ref={reportRef}>
-        <div className="p-10 min-w-[1200px] print:min-w-0 print:p-0 print:w-full">
-           {/* Report Header */}
-           <div className="flex items-center justify-between mb-8 border-b-2 border-osmak-green pb-6">
-              <div className="flex items-center gap-4">
-                  <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="Logo" className="h-20 w-auto" />
-                  <div>
-                      <h1 className="text-xl font-black text-gray-900 leading-tight">OSPITAL NG MAKATI</h1>
-                      <h2 className="text-lg font-bold text-osmak-green leading-tight uppercase">{currentMetadata.title}</h2>
-                  </div>
-              </div>
-              <div className="text-right">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Document No.</p>
-                  <p className="text-sm font-bold text-gray-800">{currentMetadata.docNo}</p>
-                  <p className="text-xs text-gray-400 mt-1 italic">As of: {new Date().toLocaleDateString()}</p>
-              </div>
-           </div>
+        <div id="ror-report-content" className="p-4 min-w-[1400px] print:min-w-0 print:p-0 print:w-full bg-white flex flex-col pt-8">
+           
+           {/* REDESIGNED HEADER TO MATCH IMAGE */}
+           <table className="w-full border-collapse border border-gray-800 mb-6 text-[10px]">
+              <tbody>
+                 <tr>
+                    <td className="border border-gray-800 p-2 w-[120px] text-center align-middle" rowSpan={2}>
+                       <img src="https://maxterrenal-hash.github.io/justculture/osmak-logo.png" alt="Logo" className="h-16 w-auto mx-auto" />
+                    </td>
+                    <td className="border border-gray-800 p-2 text-center align-middle flex-1">
+                       <div className="space-y-0.5">
+                          <p className="font-bold text-black uppercase text-xs">City Government of Makati</p>
+                          <h1 className="text-2xl font-black text-[#009a3e] leading-none tracking-[0.2em] py-1">OSPITAL NG MAKATI</h1>
+                          <p className="text-[9px] text-black font-medium">Sampaguita corner Gumamela Sts., Bgy. Pembo, Makati City</p>
+                       </div>
+                    </td>
+                    <td className="border border-gray-800 p-2 w-[150px] align-top">
+                       <p className="font-bold text-black">Document No.:</p>
+                       <p className="text-gray-800 mt-1">{currentMetadata.docNo}</p>
+                    </td>
+                    <td className="border border-gray-800 p-2 w-[150px] align-top">
+                       <p className="font-bold text-black">As of:</p>
+                       <p className="text-gray-800 mt-1">{new Date().toLocaleDateString()}</p>
+                    </td>
+                 </tr>
+                 <tr>
+                    <td className="border border-gray-800 p-2 align-top" colSpan={3}>
+                       <p className="font-bold text-black">Document Title:</p>
+                       <p className="text-gray-800 font-bold uppercase mt-0.5">{currentMetadata.title}</p>
+                    </td>
+                 </tr>
+              </tbody>
+           </table>
 
            {/* Report Table */}
-           <table className="w-full border-collapse border border-gray-300 text-[10px] leading-tight print:text-[8px]">
-              <thead>
-                 <tr className="bg-gray-100">
-                    <th className="border border-gray-300 p-2 text-center" rowSpan={2}>No.</th>
-                    <th className="border border-gray-300 p-2" rowSpan={2}>Section</th>
-                    <th className="border border-gray-300 p-2" rowSpan={2}>Process / Function</th>
-                    <th className="border border-gray-300 p-2 w-32" rowSpan={2}>Description</th>
-                    <th className="border border-gray-300 p-2 text-center" colSpan={3}>Initial Assessment</th>
-                    <th className="border border-gray-300 p-2" rowSpan={2}>Level</th>
-                    <th className="border border-gray-300 p-2 w-32" rowSpan={2}>Planned Actions</th>
-                    <th className="border border-gray-300 p-2" rowSpan={2}>Responsible / Target</th>
-                    <th className="border border-gray-300 p-2 text-center" colSpan={3}>Residual Risk</th>
-                    <th className="border border-gray-300 p-2" rowSpan={2}>Status</th>
+           <table className="w-full border-collapse border border-gray-400 text-[8.5px] leading-[1.1] print:text-[7.5px] table-fixed">
+              <thead className="bg-gray-100 text-black">
+                 <tr>
+                    <th className="border border-gray-400 p-1 text-center align-middle w-[25px] font-bold text-black" rowSpan={2}>No.</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[90px] font-bold text-black" rowSpan={2}>Process / Function</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[70px] font-bold text-black" rowSpan={2}>Source</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[140px] font-bold text-black" rowSpan={2}>Description</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[55px] font-bold text-black" rowSpan={2}>Type</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[100px] font-bold text-black" rowSpan={2}>Impact on QMS</th>
+                    <th className="border border-gray-400 p-1 text-center align-middle font-bold text-black" colSpan={3}>Initial Assessment</th>
+                    <th className="border border-gray-400 p-1 text-center align-middle w-[45px] font-bold text-black" rowSpan={2}>Level</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[100px] font-bold text-black" rowSpan={2}>Existing Controls</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[140px] font-bold text-black" rowSpan={2}>Planned Actions</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[90px] font-bold text-black" rowSpan={2}>Responsible / Target</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[75px] font-bold text-center text-black" rowSpan={2}>Date of Reassessment</th>
+                    <th className="border border-gray-400 p-1 text-center align-middle font-bold text-black" colSpan={3}>Residual Risk</th>
+                    <th className="border border-gray-400 p-1 text-center align-middle w-[50px] font-bold text-black" rowSpan={2}>Status</th>
+                    <th className="border border-gray-400 p-1 align-middle w-[110px] font-bold text-black" rowSpan={2}>Remarks on Effectiveness</th>
                  </tr>
                  <tr className="bg-gray-100 text-center">
-                    <th className="border border-gray-300 p-2">L</th>
-                    <th className="border border-gray-300 p-2">S</th>
-                    <th className="border border-gray-300 p-2">R</th>
-                    <th className="border border-gray-300 p-2">L</th>
-                    <th className="border border-gray-300 p-2">S</th>
-                    <th className="border border-gray-300 p-2">R</th>
+                    <th className="border border-gray-400 p-1 w-[22px] font-bold text-black">L</th>
+                    <th className="border border-gray-400 p-1 w-[22px] font-bold text-black">S</th>
+                    <th className="border border-gray-400 p-1 w-[22px] font-bold text-black">R</th>
+                    <th className="border border-gray-400 p-1 w-[22px] font-bold text-black">L</th>
+                    <th className="border border-gray-400 p-1 w-[22px] font-bold text-black">S</th>
+                    <th className="border border-gray-400 p-1 w-[22px] font-bold text-black">R</th>
                  </tr>
               </thead>
               <tbody>
                  {filterSection === 'ALL' ? (
                      <tr>
-                         <td colSpan={15} className="border border-gray-300 p-8 text-center text-gray-400 italic">Please select a specific section to view report data.</td>
+                         <td colSpan={20} className="border border-gray-400 p-10 text-center text-gray-400 italic font-medium">Please select a specific section to view report data.</td>
                      </tr>
                  ) : filteredItems.length === 0 ? (
                      <tr>
-                         <td colSpan={15} className="border border-gray-300 p-8 text-center text-gray-400 italic">No entries match the current filters.</td>
+                         <td colSpan={20} className="border border-gray-400 p-10 text-center text-gray-400 italic font-medium">No entries match the current filters.</td>
                      </tr>
                  ) : filteredItems.map((item, idx) => {
                      const isRisk = item.type === 'RISK';
                      
                      return (
-                        <tr key={item.id} className="hover:bg-gray-50">
-                           <td className="border border-gray-300 p-2 text-center font-bold">{idx + 1}</td>
-                           <td className="border border-gray-300 p-2 font-medium">{item.section}</td>
-                           <td className="border border-gray-300 p-2">{item.process}</td>
-                           <td className="border border-gray-300 p-2 text-gray-700">{item.description}</td>
+                        <tr key={item.id} className="hover:bg-gray-50 break-inside-avoid">
+                           <td className="border border-gray-400 p-1 text-center font-bold text-black">{idx + 1}</td>
+                           <td className="border border-gray-400 p-1 break-words text-black">{item.process}</td>
+                           <td className="border border-gray-400 p-1 break-words text-black">{item.source}</td>
+                           <td className="border border-gray-400 p-1 text-gray-700 break-words">{item.description}</td>
+                           <td className="border border-gray-400 p-1 text-center font-medium uppercase text-black">{item.type}</td>
+                           <td className="border border-gray-400 p-1 break-words text-black">{item.impactQMS || '-'}</td>
                            
                            {/* Initial Assessment L, S, R */}
-                           <td className="border border-gray-300 p-2 text-center">{isRisk ? item.likelihood : '-'}</td>
-                           <td className="border border-gray-300 p-2 text-center">{isRisk ? item.severity : '-'}</td>
-                           <td className="border border-gray-300 p-2 text-center font-bold">{isRisk ? item.riskRating : '-'}</td>
+                           <td className="border border-gray-400 p-1 text-center text-black">{isRisk ? item.likelihood : '-'}</td>
+                           <td className="border border-gray-400 p-1 text-center text-black">{isRisk ? item.severity : '-'}</td>
+                           <td className="border border-gray-400 p-1 text-center font-bold text-black">{isRisk ? item.riskRating : '-'}</td>
                            
-                           <td className="border border-gray-300 p-2 text-center font-bold">
+                           <td className="border border-gray-400 p-1 text-center font-bold uppercase text-[7px] text-black">
                                {isRisk ? item.riskLevel : item.feasibility}
                            </td>
-                           <td className="border border-gray-300 p-2 space-y-1">
+                           <td className="border border-gray-400 p-1 break-words text-black">{item.existingControls || '-'}</td>
+                           
+                           <td className="border border-gray-400 p-1 space-y-1">
                                {item.actionPlans.map(ap => (
-                                   <div key={ap.id} className="border-b border-gray-100 last:border-0 pb-1">
-                                       <span className="font-bold text-[8px] uppercase">{ap.strategy}:</span> {ap.description}
+                                   <div key={ap.id} className="border-b border-gray-100 last:border-0 pb-0.5 break-words leading-tight text-black">
+                                       <span className="font-bold text-[7.5px] uppercase">{ap.strategy}:</span> {ap.description}
                                    </div>
                                ))}
                            </td>
-                           <td className="border border-gray-300 p-2">
+                           <td className="border border-gray-400 p-1">
                                 {item.actionPlans.map(ap => (
-                                    <div key={ap.id} className="mb-1 last:mb-0">
-                                        <span className="font-bold">{ap.responsiblePerson}</span> ({ap.targetDate})
+                                    <div key={ap.id} className="mb-1 last:mb-0 break-words leading-tight text-black">
+                                        <span className="font-bold text-[7.5px]">{ap.responsiblePerson}</span>
+                                        <span className="block text-[7px] text-gray-500 font-medium">({ap.targetDate})</span>
                                     </div>
                                 ))}
                            </td>
+
+                           <td className="border border-gray-400 p-1 text-center text-black whitespace-nowrap">{item.closedAt || '-'}</td>
                            
                            {/* Residual Risk L, S, R */}
-                           <td className="border border-gray-300 p-2 text-center">{item.residualLikelihood || '-'}</td>
-                           <td className="border border-gray-300 p-2 text-center">{item.residualSeverity || '-'}</td>
-                           <td className="border border-gray-300 p-2 text-center font-bold">{item.residualRiskRating || '-'}</td>
+                           <td className="border border-gray-400 p-1 text-center text-black">{item.residualLikelihood || '-'}</td>
+                           <td className="border border-gray-400 p-1 text-center text-black">{item.residualSeverity || '-'}</td>
+                           <td className="border border-gray-400 p-1 text-center font-bold text-black">{item.residualRiskRating || '-'}</td>
                            
-                           <td className="border border-gray-300 p-2 text-center font-bold text-[8px] uppercase">
-                               {item.status.replace(/_/g, ' ')}
+                           <td className="border border-gray-400 p-1 text-center font-bold text-[7px] uppercase leading-none text-black">
+                               {item.status === 'CLOSED' ? 'CLOSED' : 'OPEN'}
                            </td>
+
+                           <td className="border border-gray-400 p-1 break-words text-black">{item.effectivenessRemarks || '-'}</td>
                         </tr>
                      );
                  })}
               </tbody>
            </table>
-
-           {/* Signatures for Print */}
-           <div className="mt-16 grid grid-cols-3 gap-12 print:mt-12 no-screen">
-              <div className="text-center">
-                  <div className="border-b border-gray-900 mb-2 pt-4"></div>
-                  <p className="text-xs font-bold uppercase">Prepared By</p>
-                  <p className="text-[10px] text-gray-500">Section Head</p>
-              </div>
-              <div className="text-center">
-                  <div className="border-b border-gray-900 mb-2 pt-4"></div>
-                  <p className="text-xs font-bold uppercase">Reviewed By</p>
-                  <p className="text-[10px] text-gray-500">IQA Auditor</p>
-              </div>
-              <div className="text-center">
-                  <div className="border-b border-gray-900 mb-2 pt-4"></div>
-                  <p className="text-xs font-bold uppercase">Approved By</p>
-                  <p className="text-[10px] text-gray-500">IQA Head / DQMR</p>
-              </div>
-           </div>
         </div>
       </div>
 
       <style>{`
-          @media screen {
-            .no-screen { display: none; }
-          }
           @media print {
             .no-print { display: none !important; }
             body { background: white !important; padding: 0 !important; }
             main { margin: 0 !important; padding: 0 !important; }
             aside { display: none !important; }
             header { display: none !important; }
-            .no-screen { display: grid !important; }
+            #ror-report-content { width: 100% !important; min-width: unset !important; padding: 0.1in 0 !important; }
+            table { width: 100% !important; border-collapse: collapse !important; border: 1px solid #000 !important; }
+            th, td { border: 1px solid #000 !important; padding: 2px !important; color: black !important; }
+            thead { background-color: #f3f4f6 !important; -webkit-print-color-adjust: exact; }
+            @page {
+                size: legal landscape;
+                margin: 0;
+            }
           }
       `}</style>
     </div>
