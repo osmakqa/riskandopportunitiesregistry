@@ -665,6 +665,8 @@ const App = () => {
                  <RORViewer 
                     items={items} 
                     displayIdMap={displayIdMap} 
+                    isIQA={isIQA}
+                    initialSection={isIQA ? (selectedSection || 'ALL') : user}
                  />
              )}
            </>

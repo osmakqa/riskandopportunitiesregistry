@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Printer, Filter, ChevronDown, Search, Download, FileText, Activity, ShieldAlert, Lightbulb, FileCode, Loader2 } from 'lucide-react';
 import { RegistryItem } from '../../lib/types';
 import { SECTIONS } from '../../lib/constants';
@@ -7,6 +7,8 @@ import { SECTIONS } from '../../lib/constants';
 interface RORViewerProps {
   items: RegistryItem[];
   displayIdMap: Record<string, string>;
+  isIQA: boolean;
+  initialSection: string | null;
 }
 
 // Mapping from Section names to Metadata
@@ -40,13 +42,19 @@ const SECTION_METADATA: Record<string, { title: string, docNo: string }> = {
   'TOP MANAGEMENT': { title: 'TOP MANAGEMENT RISKS AND OPPORTUNITIES REGISTRY', docNo: 'OsMak-QMR-SD-ROR' }
 };
 
-const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
-  const [filterSection, setFilterSection] = useState<string>('ALL');
+const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProps) => {
+  const [filterSection, setFilterSection] = useState<string>(initialSection || 'ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterItemId, setFilterItemId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   const reportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialSection) {
+      setFilterSection(initialSection);
+    }
+  }, [initialSection]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -144,8 +152,9 @@ const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Section</label>
             <select 
-              className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none"
+              className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none disabled:bg-gray-50 disabled:text-gray-400"
               value={filterSection}
+              disabled={!isIQA}
               onChange={(e) => { setFilterSection(e.target.value); setFilterItemId('ALL'); }}
             >
               <option value="ALL">All Sections</option>
@@ -209,7 +218,7 @@ const RORViewer = ({ items, displayIdMap }: RORViewerProps) => {
                        <div className="space-y-0.5">
                           <p className="font-bold text-black uppercase text-xs">City Government of Makati</p>
                           <h1 className="text-2xl font-black text-[#009a3e] leading-tight tracking-[0.2em] py-2">OSPITAL NG MAKATI</h1>
-                          <p className="text-[9px] text-black font-medium">Sampaguita corner Gumamela Sts., Bgy. Pembo, Taguig City</p>
+                          <p className="text-[9px] text-black font-medium">Sampaguita corner Gumamela Sts., Bgy. Pembo, Makati City</p>
                        </div>
                     </td>
                     <td className="border border-gray-800 p-2 w-[160px] align-top">
