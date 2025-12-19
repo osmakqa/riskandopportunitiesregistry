@@ -21,12 +21,13 @@ import AnalysisDashboard from './components/Dashboard/AnalysisDashboard';
 import Wizard from './components/Registry/Wizard';
 import ItemDetailModal from './components/Registry/ItemDetailModal';
 import AuditTrailModal from './components/Modals/AuditTrailModal';
+import RORViewer from './components/Registry/RORViewer';
 
 // Charts and cards
 import { ShieldAlert, Lightbulb, CheckCircle2, AlertTriangle, Download, Search, Layers, BarChart3, ClipboardList, ChevronRight, Building2, ChevronDown, ChevronUp } from 'lucide-react';
 import { getDaysRemaining } from './lib/utils';
 
-type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS';
+type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS' | 'ROR_VIEWER';
 
 const App = () => {
   const [user, setUser] = useState<string | null>(null);
@@ -350,6 +351,7 @@ const App = () => {
               <h2 className="text-2xl font-bold text-gray-900">
                   {view === 'DASHBOARD' ? 'Dashboard' : 
                    view === 'RO_LIST' ? 'R&O Registry List' :
+                   view === 'ROR_VIEWER' ? 'ROR Viewer' :
                    view.replace(/_/g, ' ')}
               </h2>
               {selectedSection && <p className="text-sm text-gray-500 mt-1">Viewing as: <span className="font-bold">{selectedSection}</span></p>}
@@ -364,7 +366,7 @@ const App = () => {
                     <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
 
-               {(!isIQA || selectedSection) && (
+               {(!isIQA || (selectedSection && view !== 'ROR_VIEWER')) && (
                  <button 
                     onClick={() => setIsWizardOpen(true)}
                     className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition transform hover:-translate-y-0.5"
@@ -657,6 +659,12 @@ const App = () => {
                     endDate={analysisEndDate}
                     onStartDateChange={setAnalysisStartDate}
                     onEndDateChange={setAnalysisEndDate}
+                 />
+             )}
+             {view === 'ROR_VIEWER' && (
+                 <RORViewer 
+                    items={items} 
+                    displayIdMap={displayIdMap} 
                  />
              )}
            </>

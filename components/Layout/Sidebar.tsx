@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, ClipboardList, BarChart3, LogOut, ChevronUp, ChevronDown, Building2, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardList, BarChart3, LogOut, ChevronUp, ChevronDown, Building2, X, FileText } from 'lucide-react';
 import { SECTIONS } from '../../lib/constants';
 
 const SidebarHeader = ({ onClose }: { onClose: () => void }) => (
@@ -22,7 +22,7 @@ const SidebarHeader = ({ onClose }: { onClose: () => void }) => (
     </header>
 );
 
-type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS';
+type AppView = 'DASHBOARD' | 'RO_LIST' | 'IQA_PENDING' | 'IQA_ANALYSIS' | 'ROR_VIEWER';
 
 interface SidebarProps {
   user: string;
@@ -102,6 +102,13 @@ const Sidebar = ({
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'IQA_ANALYSIS' ? 'bg-osmak-green text-white' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                     <BarChart3 size={20} /> Data Analysis
+                </button>
+
+                <button 
+                    onClick={() => onViewChange('ROR_VIEWER')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${view === 'ROR_VIEWER' ? 'bg-osmak-green text-white shadow-md' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                    <FileText size={20} /> ROR Viewer
                 </button>
 
                 <button 
