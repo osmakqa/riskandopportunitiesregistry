@@ -23,6 +23,7 @@ export const SECTIONS = [
   'Medical Social Service',
   'Nursing Division',
   'Pathology',
+  'Patient Experience and Management Section',
   'Pharmacy',
   'Physical and Occupational Therapy',
   'Radiology',
