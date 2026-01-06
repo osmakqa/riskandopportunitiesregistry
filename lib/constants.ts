@@ -11,6 +11,7 @@ export const SECTIONS = [
   'Cardiovascular Diagnostics',
   'Cashier Management',
   'Claims',
+  'Document Control Unit',
   'Emergency Room Complex',
   'Food and Nutrition Management',
   'General Services Section',
@@ -19,6 +20,7 @@ export const SECTIONS = [
   'Human Resources and Management Section',
   'Industrial Clinic',
   'Information Technology',
+  'Internal Quality Audit',
   'Laboratory',
   'Medical Social Service',
   'Nursing Division',
@@ -30,7 +32,8 @@ export const SECTIONS = [
   'Requisition Section',
   'Respiratory Diagnostic Section',
   'Supply Management Section',
-  'Surgical Care Complex'
+  'Surgical Care Complex',
+  'Top Management'
 ];
 
 export const IQA_USERS = [
