@@ -52,6 +52,7 @@ const App = () => {
   const [listFilterYear, setListFilterYear] = useState<string>('ALL');
   const [listFilterStatus, setListFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [listFilterType, setListFilterType] = useState<'ALL' | 'RISK' | 'OPPORTUNITY'>('ALL');
+  const [listFilterSection, setListFilterSection] = useState<string>('ALL');
   
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -298,6 +299,7 @@ const App = () => {
         if (listFilterStatus === 'OPEN' && item.status === 'CLOSED') return false;
         if (listFilterStatus === 'CLOSED' && item.status !== 'CLOSED') return false;
         if (listFilterType !== 'ALL' && item.type !== listFilterType) return false;
+        if (listFilterSection !== 'ALL' && item.section !== listFilterSection) return false;
         
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
@@ -314,7 +316,7 @@ const App = () => {
 
         return true;
     });
-  }, [contextItems, listFilterYear, listFilterStatus, listFilterType, searchQuery, displayIdMap]);
+  }, [contextItems, listFilterYear, listFilterStatus, listFilterType, listFilterSection, searchQuery, displayIdMap]);
 
   if (!user) return <Login onLogin={setUser} />;
 
@@ -577,6 +579,17 @@ const App = () => {
                              </div>
 
                              <div className="flex flex-wrap items-center gap-2">
+                                 {isIQA && (
+                                     <select 
+                                        value={listFilterSection}
+                                        onChange={(e) => setListFilterSection(e.target.value)}
+                                        className="border rounded px-2 py-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none max-w-[150px]"
+                                     >
+                                        <option value="ALL">All Sections</option>
+                                        {SECTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                     </select>
+                                 )}
+
                                  <select 
                                     value={listFilterYear}
                                     onChange={(e) => setListFilterYear(e.target.value)}
