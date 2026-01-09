@@ -22,7 +22,7 @@ const ItemDetailModal = ({
     likelihood: 1,
     severity: 1,
     remarks: '',
-    date: new Date().toISOString().split('T')[0]
+    completionDate: new Date().toISOString().split('T')[0]
   });
   
   const [iqaVerification, setIqaVerification] = useState({
@@ -80,6 +80,11 @@ const ItemDetailModal = ({
     const plan = item.actionPlans.find(ap => ap.id === actionId);
     if (!plan) return;
 
+    if (!reassessment.completionDate) {
+        alert("Please provide the actual Date of Completion.");
+        return;
+    }
+
     const targetDate = new Date(plan.targetDate);
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -97,12 +102,15 @@ const ItemDetailModal = ({
 
     let updatedItem = addAuditEvent(item, "Action Submitted for Verification", currentUser);
     
-    let updates: Partial<RegistryItem> = {};
+    let updates: Partial<RegistryItem> = {
+        reassessmentDate: reassessment.completionDate
+    };
 
     if (item.type === 'RISK') {
         const rating = reassessment.likelihood * reassessment.severity;
         const level = calculateRiskLevel(reassessment.likelihood, reassessment.severity);
         updates = {
+             ...updates,
              residualLikelihood: reassessment.likelihood,
              residualSeverity: reassessment.severity,
              residualRiskRating: rating,
@@ -111,7 +119,12 @@ const ItemDetailModal = ({
     }
 
     const updatedActions = item.actionPlans.map(ap => 
-      ap.id === actionId ? { ...ap, status: 'FOR_VERIFICATION', completionRemarks: finalRemarks } : ap
+      ap.id === actionId ? { 
+          ...ap, 
+          status: 'FOR_VERIFICATION', 
+          completionRemarks: finalRemarks,
+          actualCompletionDate: reassessment.completionDate 
+        } : ap
     ) as ActionPlan[];
 
     onUpdate({ ...updatedItem, actionPlans: updatedActions, ...updates });
@@ -519,6 +532,11 @@ const ItemDetailModal = ({
                         <td className="px-4 py-3 text-xs font-bold uppercase text-gray-600 align-top pt-4">{ap.strategy}</td>
                         <td className="px-4 py-3 font-medium align-top pt-4">
                           {ap.description}
+                          {ap.actualCompletionDate && (
+                            <div className="mt-2 text-[10px] font-bold text-blue-600">
+                              Actual Completion Date: {ap.actualCompletionDate}
+                            </div>
+                          )}
                           {ap.completionRemarks && (
                             <div className="mt-2 text-xs bg-gray-100 p-2 rounded text-gray-700">
                               <span className="font-bold">Completion Remarks:</span> {ap.completionRemarks}
@@ -583,7 +601,13 @@ const ItemDetailModal = ({
                                             setReassessment(prev => ({
                                                 ...prev,
                                                 likelihood: item.residualLikelihood || item.likelihood || 1,
-                                                severity: item.residualSeverity || item.severity || 1
+                                                severity: item.residualSeverity || item.severity || 1,
+                                                completionDate: new Date().toISOString().split('T')[0]
+                                            }));
+                                        } else {
+                                            setReassessment(prev => ({
+                                                ...prev,
+                                                completionDate: new Date().toISOString().split('T')[0]
                                             }));
                                         }
                                     }} 
@@ -601,6 +625,23 @@ const ItemDetailModal = ({
                         <tr>
                           <td colSpan={7} className="px-4 py-4 bg-green-50">
                             <div className="flex flex-col gap-4">
+                                <div className="bg-white p-4 rounded-lg border border-green-200 shadow-sm">
+                                    <h4 className="font-bold text-green-800 text-sm mb-3 border-b pb-2 flex items-center gap-2">
+                                        <Calendar size={16}/> Action Completion Details
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Date of Completion (Required)</label>
+                                            <input 
+                                                type="date" 
+                                                className="w-full border rounded p-2 text-sm bg-white text-gray-900 border-gray-300 focus:ring-2 focus:ring-green-500 outline-none"
+                                                value={reassessment.completionDate}
+                                                onChange={e => setReassessment({...reassessment, completionDate: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {isPlanOverdue(ap) && (
                                     <div className="bg-red-50 p-4 rounded-lg border border-red-200 mb-2">
                                         <div className="flex items-start gap-3">
@@ -680,13 +721,13 @@ const ItemDetailModal = ({
                                     <div className="flex gap-2 shrink-0">
                                         <button 
                                             onClick={() => handleUserMarkCompleted(ap.id)}
-                                            disabled={isPlanOverdue(ap) && !delayReason.trim()}
+                                            disabled={(isPlanOverdue(ap) && !delayReason.trim()) || !reassessment.completionDate}
                                             className="bg-green-700 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed flex-1 md:flex-none"
                                         >
                                             Submit for Verification
                                         </button>
                                         <button 
-                                            onClick={() => { setCompletingActionId(null); setCompletingActionId(null); setCompletionRemarks(''); setDelayReason(''); }}
+                                            onClick={() => { setCompletingActionId(null); setCompletionRemarks(''); setDelayReason(''); }}
                                             className="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm font-bold hover:bg-gray-300 flex-1 md:flex-none"
                                         >
                                             Cancel
@@ -826,7 +867,7 @@ const ItemDetailModal = ({
                               value={reopenPassword}
                               onChange={e => { setReopenPassword(e.target.value); setReopenError(''); }}
                           />
-                          <button onClick={confirmReopen} className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-blue-700">Confirm Reopen</button>
+                          <button onClick={confirmReopen} className="bg-blue-600 text-white px-3 py-1 rounded text-sm font-bold hover:bg-red-700">Confirm Reopen</button>
                           <button onClick={() => { setShowReopenConfirm(false); setReopenPassword(''); }} className="text-gray-500 text-sm hover:text-gray-700 px-2">Cancel</button>
                       </div>
                       {reopenError && <p className="text-red-600 text-xs font-bold mt-2">{reopenError}</p>}
@@ -851,6 +892,10 @@ const ItemDetailModal = ({
                             <div>
                                 <span className="block text-xs text-gray-500 uppercase">Residual Rating</span>
                                 <span className="font-bold text-gray-800">{item.residualRiskRating} ({item.residualRiskLevel})</span>
+                            </div>
+                            <div className="col-span-2 mt-2">
+                                <span className="block text-xs text-gray-500 uppercase">Action Reassessment Date</span>
+                                <span className="text-gray-600">{item.reassessmentDate || 'N/A'}</span>
                             </div>
                         </div>
                     </div>
@@ -957,6 +1002,10 @@ const ItemDetailModal = ({
                              <div>
                                  <span className="text-xs text-gray-400 uppercase">Residual Level</span>
                                  <div className={`font-bold ${item.residualRiskLevel === 'CRITICAL' ? 'text-red-600' : 'text-green-600'}`}>{item.residualRiskLevel}</div>
+                             </div>
+                             <div>
+                                 <span className="text-xs text-gray-400 uppercase">Reassessment Date</span>
+                                 <div className="font-bold text-gray-800">{item.reassessmentDate || 'N/A'}</div>
                              </div>
                          </div>
                       )}

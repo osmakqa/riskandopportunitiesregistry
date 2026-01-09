@@ -20,6 +20,7 @@ export interface ActionPlan {
   status: ActionStatus;
   completionRemarks?: string;
   verificationRemarks?: string;
+  actualCompletionDate?: string;
 }
 
 export interface RegistryItem {
