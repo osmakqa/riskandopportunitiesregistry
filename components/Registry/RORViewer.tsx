@@ -85,6 +85,94 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
     window.print();
   };
 
+  const getVerifierName = (item: RegistryItem) => {
+    if (!item.auditTrail) return '-';
+    // Look for the last event related to verification or closure
+    const verifierEvent = [...item.auditTrail].reverse().find(e => 
+      e.event.includes('Validated and Closed') || 
+      e.event.includes('Verified') ||
+      e.event.includes('IQA Verification')
+    );
+    return verifierEvent ? verifierEvent.user : '-';
+  };
+
+  const handleExportCSV = () => {
+    if (filteredItems.length === 0) return;
+
+    const headers = [
+      'No.',
+      'Process / Function',
+      'Source',
+      'Description',
+      'Type',
+      'Impact on QMS',
+      'Initial Likelihood (L)',
+      'Initial Severity (S)',
+      'Initial Rating (R)',
+      'Level / Feasibility',
+      'Existing Controls',
+      'Planned Actions',
+      'Responsible / Target',
+      'Date of Reassessment',
+      'Residual Likelihood (L)',
+      'Residual Severity (S)',
+      'Residual Rating (R)',
+      'Status',
+      'Name of Verifier',
+      'Remarks on Effectiveness'
+    ];
+
+    const formatCell = (value: any) => {
+      if (value === null || value === undefined) return '""';
+      const stringValue = String(value);
+      const escapedValue = stringValue.replace(/"/g, '""');
+      if (stringValue.includes(',') || stringValue.includes('\n') || stringValue.includes('"')) {
+        return `"${escapedValue}"`;
+      }
+      return stringValue;
+    };
+
+    const rows = filteredItems.map((item, idx) => {
+      const isRisk = item.type === 'RISK';
+      const plannedActions = item.actionPlans.map(ap => `${ap.strategy}: ${ap.description}`).join('; ');
+      const responsibleTarget = item.actionPlans.map(ap => `${ap.responsiblePerson} (${ap.targetDate})`).join('; ');
+      
+      return [
+        idx + 1,
+        item.process,
+        item.source,
+        item.description,
+        item.type,
+        item.impactQMS || '-',
+        isRisk ? item.likelihood : '-',
+        isRisk ? item.severity : '-',
+        isRisk ? item.riskRating : '-',
+        isRisk ? item.riskLevel : item.feasibility,
+        item.existingControls || '-',
+        plannedActions,
+        responsibleTarget,
+        item.closedAt || '-',
+        item.residualLikelihood || '-',
+        item.residualSeverity || '-',
+        item.residualRiskRating || '-',
+        item.status === 'CLOSED' ? 'CLOSED' : 'OPEN',
+        getVerifierName(item),
+        item.effectivenessRemarks || '-'
+      ].map(formatCell).join(',');
+    });
+
+    const sectionName = filterSection.replace(/\s+/g, '_');
+    const filename = `${sectionName}_ROR_Report.csv`;
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleDownloadHTML = () => {
     if (!reportRef.current || filterSection === 'ALL') return;
 
@@ -141,17 +229,6 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
     return SECTION_METADATA[filterSection] || { title: 'RISKS AND OPPORTUNITIES REGISTRY', docNo: 'OM-ROR-2025' };
   }, [filterSection]);
 
-  const getVerifierName = (item: RegistryItem) => {
-    if (!item.auditTrail) return '-';
-    // Look for the last event related to verification or closure
-    const verifierEvent = [...item.auditTrail].reverse().find(e => 
-      e.event.includes('Validated and Closed') || 
-      e.event.includes('Verified') ||
-      e.event.includes('IQA Verification')
-    );
-    return verifierEvent ? verifierEvent.user : '-';
-  };
-
   return (
     <div className="space-y-6">
       {/* Filters Card */}
@@ -202,14 +279,26 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
             >
                 <Printer size={18}/> <span className="hidden sm:inline">Print</span>
             </button>
-            <button 
-                onClick={handleDownloadHTML}
-                disabled={filterSection === 'ALL'}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <FileCode size={18}/> 
-                <span className="hidden sm:inline">HTML</span>
-            </button>
+            <div className="flex-1 flex gap-2">
+                <button 
+                    onClick={handleExportCSV}
+                    disabled={filterSection === 'ALL' || filteredItems.length === 0}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Export to CSV"
+                >
+                    <Download size={18}/> 
+                    <span className="hidden sm:inline">CSV</span>
+                </button>
+                <button 
+                    onClick={handleDownloadHTML}
+                    disabled={filterSection === 'ALL'}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Export to HTML"
+                >
+                    <FileCode size={18}/> 
+                    <span className="hidden sm:inline">HTML</span>
+                </button>
+            </div>
           </div>
         </div>
       </div>
