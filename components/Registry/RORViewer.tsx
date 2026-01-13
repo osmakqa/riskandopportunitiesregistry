@@ -141,6 +141,17 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
     return SECTION_METADATA[filterSection] || { title: 'RISKS AND OPPORTUNITIES REGISTRY', docNo: 'OM-ROR-2025' };
   }, [filterSection]);
 
+  const getVerifierName = (item: RegistryItem) => {
+    if (!item.auditTrail) return '-';
+    // Look for the last event related to verification or closure
+    const verifierEvent = [...item.auditTrail].reverse().find(e => 
+      e.event.includes('Validated and Closed') || 
+      e.event.includes('Verified') ||
+      e.event.includes('IQA Verification')
+    );
+    return verifierEvent ? verifierEvent.user : '-';
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters Card */}
@@ -216,9 +227,9 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
                     </td>
                     <td className="border border-gray-800 p-2 text-center align-middle flex-1">
                        <div className="space-y-0.5">
-                          <p className="font-bold text-black uppercase text-xs">City Government of Makati</p>
+                          <p className="font-bold text-black uppercase text-xs">City Government of Taguig</p>
                           <h1 className="text-2xl font-black text-[#009a3e] leading-tight tracking-[0.2em] py-2">OSPITAL NG MAKATI</h1>
-                          <p className="text-[9px] text-black font-medium">Sampaguita corner Gumamela Sts., Bgy. Pembo, Makati City</p>
+                          <p className="text-[9px] text-black font-medium">Sampaguita corner Gumamela Sts., Bgy. Pembo, Taguig City</p>
                        </div>
                     </td>
                     <td className="border border-gray-800 p-2 w-[160px] align-top">
@@ -257,6 +268,7 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
                     <th className="border border-gray-400 px-1 py-3 text-center align-middle w-[80px] font-bold text-black overflow-visible" rowSpan={2} style={{ lineHeight: '1.2' }}>Date of Reassessment</th>
                     <th className="border border-gray-400 px-1 py-3 text-center align-middle font-bold text-black overflow-visible" colSpan={3} style={{ lineHeight: '1.2' }}>Residual Risk</th>
                     <th className="border border-gray-400 px-1 py-3 text-center align-middle w-[55px] font-bold text-black overflow-visible" rowSpan={2} style={{ lineHeight: '1.2' }}>Status</th>
+                    <th className="border border-gray-400 px-1 py-3 text-left align-middle w-[85px] font-bold text-black overflow-visible" rowSpan={2} style={{ lineHeight: '1.2' }}>Name of Verifier</th>
                     <th className="border border-gray-400 px-1 py-3 text-left align-middle w-[120px] font-bold text-black overflow-visible" rowSpan={2} style={{ lineHeight: '1.2' }}>Remarks on Effectiveness</th>
                  </tr>
                  <tr className="bg-gray-100 text-center">
@@ -271,11 +283,11 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
               <tbody>
                  {filterSection === 'ALL' ? (
                      <tr>
-                         <td colSpan={20} className="border border-gray-400 p-10 text-center text-gray-400 italic font-medium">Please select a specific section to view report data.</td>
+                         <td colSpan={21} className="border border-gray-400 p-10 text-center text-gray-400 italic font-medium">Please select a specific section to view report data.</td>
                      </tr>
                  ) : filteredItems.length === 0 ? (
                      <tr>
-                         <td colSpan={20} className="border border-gray-400 p-10 text-center text-gray-400 italic font-medium">No entries match the current filters.</td>
+                         <td colSpan={21} className="border border-gray-400 p-10 text-center text-gray-400 italic font-medium">No entries match the current filters.</td>
                      </tr>
                  ) : filteredItems.map((item, idx) => {
                      const isRisk = item.type === 'RISK';
@@ -324,6 +336,10 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
                            
                            <td className="border border-gray-400 p-1.5 text-center font-bold text-[7px] uppercase leading-none text-black align-top">
                                {item.status === 'CLOSED' ? 'CLOSED' : 'OPEN'}
+                           </td>
+
+                           <td className="border border-gray-400 p-1.5 text-left text-black align-top leading-tight break-words">
+                               {getVerifierName(item)}
                            </td>
 
                            <td className="border border-gray-400 p-1.5 break-words text-black align-top leading-tight">{item.effectivenessRemarks || '-'}</td>

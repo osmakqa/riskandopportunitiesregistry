@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Pencil, Save, XCircle, Calendar, FileText, Activity, ClipboardCheck, AlertTriangle, Trash2, CheckCircle2, RotateCcw, X } from 'lucide-react';
+import { Pencil, Save, XCircle, Calendar, FileText, Activity, ClipboardCheck, AlertTriangle, Trash2, CheckCircle2, RotateCcw, X, Clock } from 'lucide-react';
 import { RegistryItem, ActionPlan } from '../../lib/types';
 import { SOURCES, RISK_STRATEGIES, OPP_STRATEGIES, LIKELIHOOD_DESC, SEVERITY_DESC, CREDENTIALS } from '../../lib/constants';
 import { calculateRiskLevel, getRiskColor, getStatusColor, formatStatus, getActionPillColor, addAuditEvent, getLevelPillColor } from '../../lib/utils';
@@ -51,6 +51,10 @@ const ItemDetailModal = ({
   useEffect(() => {
     setEditData(item);
   }, [item]);
+
+  const isMainIQA = currentUser === 'Main IQA Account';
+  // Main IQA can edit everything at any time. Others can only edit in IMPLEMENTATION phase.
+  const canEdit = isMainIQA || (!isIQA && item.status === 'IMPLEMENTATION');
 
   const handleVerifyAction = (actionId: string, status: 'COMPLETED' | 'REVISION_REQUIRED') => {
       const updatedActions = item.actionPlans.map(ap => 
@@ -222,13 +226,12 @@ const ItemDetailModal = ({
   };
 
   const handleSaveEdit = () => {
-    const updatedItem = addAuditEvent(editData, "Details Edited", currentUser);
+    const updatedItem = addAuditEvent(editData, "Details Edited by Admin", currentUser);
     onUpdate(updatedItem);
     setIsEditing(false);
   };
 
   const strategies = item.type === 'RISK' ? RISK_STRATEGIES : OPP_STRATEGIES;
-  const canEdit = !isIQA && item.status === 'IMPLEMENTATION';
 
   const isPlanOverdue = (plan: ActionPlan) => {
     if (plan.status === 'COMPLETED' || plan.status === 'FOR_VERIFICATION') return false; 
@@ -245,9 +248,22 @@ const ItemDetailModal = ({
           <div className="flex-1 mr-4">
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-xs text-gray-500 bg-white border px-2 py-0.5 rounded">{displayId}</span>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(item.status)}`}>
-                {formatStatus(item.status)}
-              </span>
+              {isEditing && isMainIQA ? (
+                <select 
+                    className={`px-2 py-0.5 rounded-full text-xs font-bold border-none ring-1 ring-gray-300 ${getStatusColor(editData.status)}`}
+                    value={editData.status}
+                    onChange={e => setEditData({...editData, status: e.target.value as any})}
+                >
+                    <option value="IMPLEMENTATION">IMPLEMENTATION</option>
+                    <option value="REASSESSMENT">REASSESSMENT</option>
+                    <option value="IQA_VERIFICATION">IQA VERIFICATION</option>
+                    <option value="CLOSED">CLOSED</option>
+                </select>
+              ) : (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${getStatusColor(item.status)}`}>
+                    {formatStatus(item.status)}
+                </span>
+              )}
               <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${item.type === 'RISK' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
                 {item.type}
               </span>
@@ -258,7 +274,7 @@ const ItemDetailModal = ({
                 className="w-full text-xl font-bold text-gray-900 border-b border-gray-300 focus:outline-none focus:border-osmak-600 bg-white"
                 value={editData.description}
                 onChange={e => setEditData({...editData, description: e.target.value})}
-                placeholder="Guide: Describe the risk (what can go wrong) or opportunity (what can be improved). Example: Failure to verify patient ID before medication administration."
+                placeholder="Description of Risk or Opportunity..."
               />
             ) : (
               <h2 className="text-xl font-bold text-gray-900">{item.description}</h2>
@@ -302,7 +318,6 @@ const ItemDetailModal = ({
                     className="w-full border rounded p-1 bg-white text-gray-900" 
                     value={editData.process} 
                     onChange={e => setEditData({...editData, process: e.target.value})}
-                    placeholder="Guide: State the specific operational process. Example: Patient Admission, Medication Dispensing, Supply Chain Management"
                     />
                 ) : (
                    <span className="font-semibold text-gray-800">{item.process}</span>
@@ -348,6 +363,23 @@ const ItemDetailModal = ({
              </div>
           </div>
 
+          {isEditing && isMainIQA && (
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <div>
+                   <span className="text-blue-600 text-xs uppercase font-bold block mb-1">Created At</span>
+                   <input type="date" className="w-full border rounded p-1 bg-white text-gray-900" value={editData.createdAt} onChange={e => setEditData({...editData, createdAt: e.target.value})} />
+                </div>
+                <div>
+                   <span className="text-blue-600 text-xs uppercase font-bold block mb-1">Closed At</span>
+                   <input type="date" className="w-full border rounded p-1 bg-white text-gray-900" value={editData.closedAt || ''} onChange={e => setEditData({...editData, closedAt: e.target.value || undefined})} />
+                </div>
+                <div>
+                   <span className="text-blue-600 text-xs uppercase font-bold block mb-1">Reassessment Date</span>
+                   <input type="date" className="w-full border rounded p-1 bg-white text-gray-900" value={editData.reassessmentDate || ''} onChange={e => setEditData({...editData, reassessmentDate: e.target.value || undefined})} />
+                </div>
+             </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <div className="space-y-4">
                <h3 className="font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
@@ -363,7 +395,6 @@ const ItemDetailModal = ({
                             className="w-full border rounded p-2 bg-white text-gray-900" 
                             value={editData.impactQMS} 
                             onChange={e => setEditData({...editData, impactQMS: e.target.value})} 
-                            placeholder="Guide: Describe consequences on Quality, Safety, or Compliance. Example: Patient safety compromise, legal non-conformity, delay in service."
                         />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.impactQMS}</p>
@@ -376,7 +407,6 @@ const ItemDetailModal = ({
                             className="w-full border rounded p-2 bg-white text-gray-900" 
                             value={editData.existingControls} 
                             onChange={e => setEditData({...editData, existingControls: e.target.value})} 
-                            placeholder="Guide: List current preventive measures. Example: SOPs, Regular Staff Training, Equipment Maintenance, Quality Audits."
                         />
                      ) : (
                         <p className="text-gray-900 bg-gray-50 p-3 rounded-lg text-sm border border-gray-200">{item.existingControls || 'N/A'}</p>
@@ -463,25 +493,31 @@ const ItemDetailModal = ({
                         <div>
                              <h4 className="text-xs font-bold text-gray-400 uppercase mb-2 border-t pt-4">Residual Assessment</h4>
                              <div className="flex gap-4">
-                                 <div className="flex-1 bg-amber-50 p-4 rounded-lg text-center border border-amber-100">
+                                 <div className={`flex-1 ${isEditing && isMainIQA ? 'bg-blue-50 border border-blue-200' : 'bg-amber-50'} p-4 rounded-lg text-center`}>
                                     <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Likelihood</span>
-                                    <div className="text-2xl font-bold text-gray-900">{item.residualLikelihood}</div>
-                                    <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[item.residualLikelihood || 1]}</div>
+                                    {isEditing && isMainIQA ? (
+                                       <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.residualLikelihood || 1} onChange={e => setEditData({...editData, residualLikelihood: parseInt(e.target.value), residualRiskRating: parseInt(e.target.value) * (editData.residualSeverity || 1), residualRiskLevel: calculateRiskLevel(parseInt(e.target.value), editData.residualSeverity || 1)})} />
+                                    ) : null}
+                                    <div className="text-2xl font-bold text-gray-900">{isEditing && isMainIQA ? editData.residualLikelihood : item.residualLikelihood}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{LIKELIHOOD_DESC[(isEditing && isMainIQA ? editData.residualLikelihood : item.residualLikelihood) || 1]}</div>
                                  </div>
                                  
-                                 <div className="flex-1 bg-amber-50 p-4 rounded-lg text-center border border-amber-100">
+                                 <div className={`flex-1 ${isEditing && isMainIQA ? 'bg-blue-50 border border-blue-200' : 'bg-amber-50'} p-4 rounded-lg text-center`}>
                                     <span className="text-gray-500 text-xs uppercase font-bold block mb-2">Severity</span>
-                                    <div className="text-2xl font-bold text-gray-900">{item.residualSeverity}</div>
-                                    <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[item.residualSeverity || 1]}</div>
+                                    {isEditing && isMainIQA ? (
+                                       <input type="range" min="1" max="5" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-osmak-600" value={editData.residualSeverity || 1} onChange={e => setEditData({...editData, residualSeverity: parseInt(e.target.value), residualRiskRating: (editData.residualLikelihood || 1) * parseInt(e.target.value), residualRiskLevel: calculateRiskLevel(editData.residualLikelihood || 1, parseInt(e.target.value))})} />
+                                    ) : null}
+                                    <div className="text-2xl font-bold text-gray-900">{isEditing && isMainIQA ? editData.residualSeverity : item.residualSeverity}</div>
+                                    <div className="text-xs text-gray-400 mt-1">{SEVERITY_DESC[(isEditing && isMainIQA ? editData.residualSeverity : item.residualSeverity) || 1]}</div>
                                  </div>
 
                                  <div className="flex-1 p-4 rounded-lg text-center border-2 border-amber-100 flex flex-col justify-center items-center bg-white">
                                     <span className="text-gray-500 text-xs uppercase font-bold block mb-1">Residual Rating</span>
                                     <div className="text-3xl font-bold text-gray-800">
-                                      {item.residualRiskRating}
+                                      {isEditing && isMainIQA ? editData.residualRiskRating : item.residualRiskRating}
                                     </div>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(item.residualRiskLevel)}`}>
-                                        {item.residualRiskLevel}
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getRiskColor(isEditing && isMainIQA ? editData.residualRiskLevel : item.residualRiskLevel)}`}>
+                                        {isEditing && isMainIQA ? editData.residualRiskLevel : item.residualRiskLevel}
                                     </span>
                                  </div>
                               </div>
@@ -501,7 +537,7 @@ const ItemDetailModal = ({
               <h3 className="font-bold text-gray-900 flex items-center gap-2">
                 <ClipboardCheck size={20} /> Action Plans
               </h3>
-              {(!isIQA && item.status === 'IMPLEMENTATION' && !isAddingPlan) && (
+              {(canEdit && !isAddingPlan) && (
                 <button onClick={() => setIsAddingPlan(true)} className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-100 border border-blue-200">
                   + Add / Revise Plan
                 </button>
@@ -581,8 +617,10 @@ const ItemDetailModal = ({
                                   </button>
                                 </>
                               )}
-                              {item.status === 'IMPLEMENTATION' && ap.status === 'FOR_IMPLEMENTATION' && (
-                                <span className="text-xs text-gray-400 italic">Waiting for user...</span>
+                              {isMainIQA && (
+                                <button onClick={() => handleDeletePlan(ap.id)} className="text-red-500 hover:text-red-700 p-1">
+                                  <Trash2 size={16} />
+                                </button>
                               )}
                             </div>
                           ) : (
