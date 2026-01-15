@@ -45,6 +45,7 @@ const SECTION_METADATA: Record<string, { title: string, docNo: string }> = {
 const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProps) => {
   const [filterSection, setFilterSection] = useState<string>(initialSection || 'ALL');
   const [filterType, setFilterType] = useState<string>('ALL');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
   const [filterItemId, setFilterItemId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -60,6 +61,10 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
     return items.filter(item => {
       const matchSection = filterSection === 'ALL' || item.section === filterSection;
       const matchType = filterType === 'ALL' || item.type === filterType;
+      const matchStatus = filterStatus === 'ALL' || 
+          (filterStatus === 'OPEN' && item.status !== 'CLOSED') || 
+          (filterStatus === 'CLOSED' && item.status === 'CLOSED');
+      
       const refId = displayIdMap[item.id] || item.id;
       const matchItem = filterItemId === 'ALL' || refId === filterItemId;
       
@@ -68,18 +73,25 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
         item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.process.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchSection && matchType && matchItem && matchSearch;
+      return matchSection && matchType && matchStatus && matchItem && matchSearch;
     }).sort((a, b) => {
         return new Date(a.dateIdentified).getTime() - new Date(b.dateIdentified).getTime();
     });
-  }, [items, filterSection, filterType, filterItemId, searchQuery, displayIdMap]);
+  }, [items, filterSection, filterType, filterStatus, filterItemId, searchQuery, displayIdMap]);
 
   const availableItemIds = useMemo(() => {
      return items
-        .filter(i => (filterSection === 'ALL' || i.section === filterSection) && (filterType === 'ALL' || i.type === filterType))
+        .filter(i => {
+            const matchSection = filterSection === 'ALL' || i.section === filterSection;
+            const matchType = filterType === 'ALL' || i.type === filterType;
+            const matchStatus = filterStatus === 'ALL' || 
+                (filterStatus === 'OPEN' && i.status !== 'CLOSED') || 
+                (filterStatus === 'CLOSED' && i.status === 'CLOSED');
+            return matchSection && matchType && matchStatus;
+        })
         .map(i => displayIdMap[i.id] || i.id)
         .sort();
-  }, [items, filterSection, filterType, displayIdMap]);
+  }, [items, filterSection, filterType, filterStatus, displayIdMap]);
 
   const handlePrint = () => {
     window.print();
@@ -236,7 +248,7 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
         <div className="flex items-center gap-2 text-osmak-green font-bold mb-4">
             <Filter size={20}/> Report Filters
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Section</label>
             <select 
@@ -259,6 +271,18 @@ const RORViewer = ({ items, displayIdMap, isIQA, initialSection }: RORViewerProp
               <option value="ALL">Risks & Opportunities</option>
               <option value="RISK">Risks Only</option>
               <option value="OPPORTUNITY">Opportunities Only</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
+            <select 
+              className="w-full border rounded-lg p-2 text-sm bg-white text-gray-900 focus:ring-2 focus:ring-osmak-green outline-none"
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value as any); setFilterItemId('ALL'); }}
+            >
+              <option value="ALL">All Status</option>
+              <option value="OPEN">Open</option>
+              <option value="CLOSED">Closed</option>
             </select>
           </div>
           <div>
